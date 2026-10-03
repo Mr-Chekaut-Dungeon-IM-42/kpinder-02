@@ -11,17 +11,16 @@ Backend is organized as **vertical slices** — one bounded context per feature,
 | Slice | Owns | Depends on |
 |---|---|---|
 | `auth` | login, registration, JWT issuance, profile management, photo upload | `shared` |
-| `matching` | candidate ranking, swipe, match detection | `shared`, Redis (cache + bus) |
-| `chat` | 1:1 messaging over WebSocket, read receipts | `shared` |
-| `notifications` | persisted notifications, delivery to online users | `shared`, Redis (bus) |
+| `matching` | candidate ranking, swipe, match detection | `shared` |
+| `chat` | 1:1 messaging over WebSocket | `shared` |
 
 `shared/` (core) is not a slice — it's infrastructure every slice depends on, and never the other way around:
 - DB session factory
 - JWT-verify dependency (identifies the current user for any slice's router)
 - WebSocket connection registry (`user_id → connection`, in-memory, single-process)
-- Core data models: `User`, `Profile`, `Interest`, `UserInterest`
+- Core data models: `User`, `Interest`, `UserInterests`
 
-A slice's own repository may read `shared`'s tables directly (e.g. `matching` reads `Profile`/`Interest` for candidate ranking) — that's reading shared data, not calling another slice's business logic, so it doesn't violate the no-cross-slice-import rule.
+A slice's own repository may read `shared`'s tables directly (e.g. `matching` reads `User`/`Interest` for candidate ranking) — that's reading shared data, not calling another slice's business logic, so it doesn't violate the no-cross-slice-import rule.
 
 ### Internal layering (per slice)
 
@@ -35,79 +34,65 @@ tests/           — unit tests (repository mocked) + integration tests (real DB
 
 ### Cross-slice communication
 
-Slices that need to react to another slice's events do so via a **Redis pub/sub event bus**, never by importing each other:
-
-- `matching` publishes `match.created`
-- `chat` publishes `message.sent`
-- `notifications` subscribes to both, persists a `Notification` row, and pushes it live over the shared WS registry if the recipient is connected
-
-A message **read receipt** is the one exception that does *not* go through the bus — both sides of a read receipt are internal to `chat` (sender and recipient are both `chat`'s concern), so `chat`'s service pushes directly over the shared WS registry.
+There is no event bus and no message broker. `matching` and `chat` are the only slices with anything to push live, and each does so directly over the shared WS registry to the other user involved — e.g. `matching` pushes a "match" update to both users the moment a `MATCH` is created, and `chat` pushes a new message (and its read receipt) to the other side of the conversation. Nothing is persisted and nothing is delivered after the fact: an offline user simply sees the new match/message next time they open the matches list or chat. A dedicated `notifications` slice, a Redis pub/sub event bus (`match.created`/`message.sent`), and a candidate-list cache were all designed and then deliberately cut from this MVP — see `ai/audit.md` and `standards/adr/0003-redis-event-bus.md` for why, and what would need to change to bring them back.
 
 ## 2. Data model
 
 ```mermaid
 erDiagram
-    USER ||--|| PROFILE : has
-    PROFILE }o--o{ INTEREST : "via UserInterest"
-    USER ||--o{ SWIPE : "swiper"
-    USER ||--o{ SWIPE : "swiped (target)"
-    USER ||--o{ MATCH : "user_a"
-    USER ||--o{ MATCH : "user_b"
-    MATCH ||--o{ MESSAGE : contains
-    USER ||--o{ MESSAGE : sends
-    USER ||--o{ NOTIFICATION : receives
+      USER ||--o{ USER_INTERESTS : "has"
+      INTEREST ||--o{ USER_INTERESTS : "tagged with"
+      USER ||--o{ SWIPE : "swiper"
+      USER ||--o{ SWIPE : "swiped (target)"
+      USER ||--o{ MATCH : "user_a"
+      USER ||--o{ MATCH : "user_b"
+      MATCH ||--o{ MESSAGE : contains
+      USER ||--o{ MESSAGE : sends
 
-    USER {
-        uuid id PK
-        string email UK
-        string password_hash
-        datetime created_at
-    }
-    PROFILE {
-        uuid user_id PK, FK
-        string name
-        int age
-        string bio
-        string gender
-        string seeking
-        int age_min
-        int age_max
-        geography location
-        string photo_url
-    }
-    INTEREST {
-        uuid id PK
-        string name UK
-    }
-    SWIPE {
-        uuid id PK
-        uuid swiper_id FK
-        uuid swiped_id FK
-        enum decision "like | pass"
-        datetime created_at
-    }
-    MATCH {
-        uuid id PK
-        uuid user_a_id FK
-        uuid user_b_id FK
-        datetime created_at
-    }
-    MESSAGE {
-        uuid id PK
-        uuid match_id FK
-        uuid sender_id FK
-        string content
-        datetime created_at
-        datetime read_at "nullable"
-    }
-    NOTIFICATION {
-        uuid id PK
-        uuid user_id FK
-        enum type "match_created | message_received"
-        uuid reference_id "match_id or message_id"
-        datetime created_at
-        datetime read_at "nullable"
-    }
+      USER {
+          uuid id PK
+          string email UK
+          string password_hash
+          datetime created_at
+          string name
+          int age
+          string bio
+          string gender
+          string seeking
+          int age_min
+          int age_max
+          geography location
+          string photo_url
+      }
+      INTEREST {
+          uuid id PK
+          string name UK
+      }
+      USER_INTERESTS {
+          uuid user_id FK
+          uuid interest_id FK
+      }
+      SWIPE {
+          uuid id PK
+          uuid swiper_id FK
+          uuid swiped_id FK
+          enum decision "like | pass"
+          datetime created_at
+      }
+      MATCH {
+          uuid id PK
+          uuid user_a_id FK
+          uuid user_b_id FK
+          datetime created_at
+      }
+      MESSAGE {
+          uuid id PK
+          uuid match_id FK
+          uuid sender_id FK
+          string content
+          datetime created_at
+          datetime read_at "nullable"
+      }
 ```
 
 Notes:
@@ -119,45 +104,39 @@ Notes:
 ## 3. Key scenarios — how data updates
 
 ### Registration & login (`auth`)
-1. `POST /auth/register` — validates input, hashes password, inserts `User` + empty `Profile`.
+1. `POST /auth/register` — validates input, hashes password, inserts a `User` row.
 2. `POST /auth/login` — verifies credentials, issues a JWT (single long-lived access token, no refresh rotation for MVP).
 3. All other slices' routers depend on the shared JWT-verify dependency to identify the caller — none re-implement auth.
 
 ### Profile management & photo upload (`auth`)
-1. `PATCH /auth/profile` — updates `Profile` fields (bio, interests, location, gender/seeking, age range) directly; no cache to invalidate here (candidate cache keys are per-*viewer*, and staleness is bounded by the 10-minute TTL rather than actively busted).
-2. `POST /auth/profile/photo` — validates content-type/magic bytes and size, writes to a local disk volume under a randomized UUID filename, stores the resulting `photo_url` on `Profile`.
+1. `PATCH /auth/profile` — updates `User` fields (bio, interests, location, gender/seeking, age range) directly.
+2. `POST /auth/profile/photo` — validates content-type/magic bytes and size, writes to a local disk volume under a randomized UUID filename, stores the resulting `photo_url` on `User`.
 
 ### Swipe & match (`matching`)
-1. `GET /matching/candidates` — checks Redis for `candidates:{user_id}` (TTL 10 min); on miss, queries `Profile` filtered by PostGIS radius + gender/seeking + age range, excluding users already present in `SWIPE`, ranks the rest by Jaccard interest overlap, caches the ordered list.
-2. `POST /matching/swipe` — inserts a `SWIPE` row (`like` or `pass`). If a reciprocal `like` already exists for the pair, creates a `MATCH` row and publishes `match.created` on the Redis bus.
-3. `notifications` (subscriber) receives `match.created`, inserts a `Notification`, and pushes it live over the shared WS registry if either user is connected.
+1. `GET /matching/candidates` — queries `User` filtered by PostGIS radius + gender/seeking + age range, excluding users already present in `SWIPE`, ranks the rest by Jaccard interest overlap.
+2. `POST /matching/swipe` — inserts a `SWIPE` row (`like` or `pass`). If a reciprocal `like` already exists for the pair, creates a `MATCH` row and pushes a live "match" update directly to both users over the shared WS registry, if connected.
 
 ### Messaging (`chat`)
 1. Client opens a WebSocket authenticated via the shared JWT dependency; `chat` registers the connection in the shared WS registry.
-2. `send_message` over the socket — validates the sender is part of the `match`, inserts a `Message`, publishes `message.sent` on the Redis bus, and pushes the message directly to the recipient's connection if registered.
-3. `notifications` (subscriber) receives `message.sent`, inserts a `Notification` (covers the case where the recipient isn't currently connected).
-4. `mark_read` over the socket — sets `Message.read_at`, and `chat` pushes a read-receipt update directly to the sender's connection via the shared WS registry (no bus — this is intra-slice).
-
-### Notifications (`notifications`)
-1. `GET /notifications` — lists the current user's `Notification` rows, newest first.
-2. `POST /notifications/{id}/read` — sets `read_at`.
-3. If the user isn't connected when an event arrives, the `Notification` row is simply picked up next time they call `GET /notifications` — no push retry/offline queue for MVP.
+2. `send_message` over the socket — validates the sender is part of the `match`, inserts a `Message`, and pushes it directly to the recipient's connection if registered. If the recipient isn't connected, they see it next time they open the chat.
+3. `mark_read` over the socket — sets `Message.read_at`, and pushes a read-receipt update directly to the sender's connection if registered.
 
 ## 4. Scoped out (documented, not built)
 
 - Frontend tests (Vitest/RTL) — backend-only test coverage for this lab.
 - JWT refresh-token rotation — single long-lived access token.
-- Multi-instance WebSocket scaling — connection registry is single-process; horizontal scaling would need a pub/sub-backed registry (the same Redis bus, extended).
+- Multi-instance WebSocket scaling — connection registry is single-process.
 - Rate limiting / abuse prevention.
-- Offline push notifications (APNs/FCM) — in-app only, delivered over the existing WebSocket.
+- `notifications` slice, persisted/offline notifications, and any event bus or message broker (Redis or otherwise) — `matching`/`chat` push live over the shared WS registry only; nothing is queued, persisted, or delivered to an offline user. See `ai/audit.md` for the fuller design this replaced and why it was cut.
+- Candidate-list caching — `matching` queries Postgres directly on every request; no cache layer.
 
 ## 5. Infra & environments
 
-- **Local**: `docker compose up` — Postgres+PostGIS, Redis, backend, frontend.
+- **Local**: `docker compose up` — Postgres+PostGIS, backend, frontend.
 - **CI**: GitHub Actions — `ruff`/`eslint`+`prettier`, backend unit tests, integration tests (real Postgres+PostGIS via testcontainers), frontend build. All required checks on every PR into `main`.
 - **Staging**: Railway, auto-deploys on every merge to `main`.
 - **Production**: Railway, manual-trigger promotion (tagged release) after staging verification.
-- **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, Redis URL, JWT signing key) are never committed — `.env.example` only.
+- **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, JWT signing key) are never committed — `.env.example` only.
 
 ## 6. Standards
 
