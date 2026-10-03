@@ -64,7 +64,7 @@ erDiagram
         datetime created_at
     }
     PROFILE {
-        uuid user_id PK_FK
+        uuid user_id PK, FK
         string name
         int age
         string bio
