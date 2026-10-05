@@ -2,8 +2,6 @@
 
 Dating service MVP. Monorepo: `backend/` (Python, FastAPI) + `frontend/` (React, TypeScript, Vite).
 
-Architecture, decisions, and rationale are visualized at: https://claude.ai/code/artifact/d5c8553c-b34f-4e08-ba3d-59f51a836829
-
 ## 1. Components
 
 Backend is organized as **vertical slices** — one bounded context per feature, not horizontal layers spanning the whole app. A slice owns its router, service, repository, and (where applicable) its own tables. Slices never import another slice's router or service.
@@ -34,7 +32,7 @@ tests/           — unit tests (repository mocked) + integration tests (real DB
 
 ### Cross-slice communication
 
-There is no event bus and no message broker. `matching` and `chat` are the only slices with anything to push live, and each does so directly over the shared WS registry to the other user involved — e.g. `matching` pushes a "match" update to both users the moment a `MATCH` is created, and `chat` pushes a new message (and its read receipt) to the other side of the conversation. Nothing is persisted and nothing is delivered after the fact: an offline user simply sees the new match/message next time they open the matches list or chat. A dedicated `notifications` slice, a Redis pub/sub event bus (`match.created`/`message.sent`), and a candidate-list cache were all designed and then deliberately cut from this MVP — see `ai/audit.md` and `standards/adr/0003-redis-event-bus.md` for why, and what would need to change to bring them back.
+There is no event bus and no message broker. `matching` and `chat` are the only slices with anything to push live, and each does so directly over the shared WS registry to the other user involved — `chat` pushes a new message (and its read receipt) to the other side of the conversation. Nothing is persisted and nothing is delivered after the fact: an offline user simply sees the new match/message next time they open the matches list or chat. A dedicated `notifications` slice, a Redis pub/sub event bus (`match.created`/`message.sent`), and a candidate-list cache were all designed and then deliberately cut from this MVP — see `ai/audit.md` and `standards/adr/0003-redis-event-bus.md` for why, and what would need to change to bring them back.
 
 ## 2. Data model
 
@@ -91,7 +89,6 @@ erDiagram
           uuid sender_id FK
           string content
           datetime created_at
-          datetime read_at "nullable"
       }
 ```
 
@@ -119,7 +116,6 @@ Notes:
 ### Messaging (`chat`)
 1. Client opens a WebSocket authenticated via the shared JWT dependency; `chat` registers the connection in the shared WS registry.
 2. `send_message` over the socket — validates the sender is part of the `match`, inserts a `Message`, and pushes it directly to the recipient's connection if registered. If the recipient isn't connected, they see it next time they open the chat.
-3. `mark_read` over the socket — sets `Message.read_at`, and pushes a read-receipt update directly to the sender's connection if registered.
 
 ## 4. Scoped out (documented, not built)
 
@@ -135,7 +131,6 @@ Notes:
 - **Local**: `docker compose up` — Postgres+PostGIS, backend, frontend.
 - **CI**: GitHub Actions — `ruff`/`eslint`+`prettier`, backend unit tests, integration tests (real Postgres+PostGIS via testcontainers), frontend build. All required checks on every PR into `main`.
 - **Staging**: Railway, auto-deploys on every merge to `main`.
-- **Production**: Railway, manual-trigger promotion (tagged release) after staging verification.
 - **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, JWT signing key) are never committed — `.env.example` only.
 
 ## 6. Standards

@@ -36,7 +36,3 @@ What this makes easier, what it makes harder, what it leaves open.
 ```
 
 ADRs are written only for decisions with a real, defensible tradeoff — not for every technical pick. Routine stack choices (FastAPI, ruff, Vite) are covered by a short blurb in [`spec.md`](../spec.md) instead; see `spec.md` §6 for which decisions warranted an ADR and why.
-
-## Relationship to `spec.md` and `ai/audit.md`
-
-`spec.md` describes the target architecture in full — the ideal design, including pieces (like the Redis event bus) that the team later chose not to build yet for the MVP. [`ai/audit.md`](../ai/audit.md) is where that gap is tracked: it lists what was deliberately scoped out of the initial implementation and why. An ADR can be "accepted" as the right long-term decision while its implementation is still scoped out — the ADR records the *decision*, `ai/audit.md` records the *current build status* against that decision.
