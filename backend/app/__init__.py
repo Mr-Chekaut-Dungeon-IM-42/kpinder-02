@@ -1,0 +1,1 @@
+"""Kpinder Backend Application."""
