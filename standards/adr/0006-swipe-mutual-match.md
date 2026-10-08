@@ -17,4 +17,4 @@ Auto-matching (the algorithm unilaterally decides two users are a match once sim
 
 ## Consequences
 
-Requires a `Swipe` table distinct from `Match` (see `spec.md` §2) — `Swipe` is an append-only decision log, `Match` is the derived, addressable relationship that `Message` attaches to. The mutual-like detection needs a unique constraint on the normalized `(user_a_id, user_b_id)` pair to handle the race where both users swipe within milliseconds of each other.
+Requires a `Swipe` table distinct from `Match` (see `spec.md` §2) — `Swipe` is an append-only decision log, `Match` is the derived, addressable relationship that `Message` attaches to. The mutual-like detection needs a unique constraint on the normalized `(user_a_id, user_b_id)` pair to handle the race where both users swipe within milliseconds of each other — see ADR-0009 for how that race is actually resolved.
