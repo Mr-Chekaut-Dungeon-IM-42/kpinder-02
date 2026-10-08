@@ -12,3 +12,12 @@ Six things were designed into an earlier iteration of `spec.md` and then dropped
 4. **`profile` folded into `auth`.** Four slices instead of five — profile management (including photo upload) lives in `auth` rather than as its own bounded context, since unlike `matching`/`chat`/`notifications` it had no independent events or subscribers to justify separate slice status.
 5. **Message read receipts removed.** `Message` has no `read_at`; no "message read" WS push. Chat delivers content only, no read-state tracking.
 6. **Production environment removed.** One deployed environment (Railway staging, auto-deploy on merge to `main`). No manual-promotion/tagged-release step, no separate prod secrets.
+
+## Part A (continued) — Lab-2 functional-requirements scope cuts (2026-10-08)
+
+8. **No email verification on `POST /auth/signup`.** Account is active immediately; no confirmation token/email step.
+9. **No password complexity rules beyond a minimum length.** No uppercase/symbol/entropy requirements.
+10. **No content moderation on messages.** Only a generous max-length cap; no profanity filter.
+11. **No old-photo cleanup on re-upload.** `POST /auth/upload_photo` overwrites `User.photo_url`; the previous R2 object is left orphaned, not deleted.
+12. **Once in, there's no way out - logout removed entirely, no JWT revocation.** Originally specified, then built out as a Postgres `RevokedToken` blocklist (ADR-0011), then reverted: a no-op logout (discard the token client-side only) was judged indefensible once named as a real endpoint, so rather than keep a blocklist whose only purpose was to make that endpoint mean something, the endpoint itself was cut and auth reverted to ADR-0007 exactly as originally written (see ADR-0014). A leaked or shared-device token stays valid until natural expiry — an accepted MVP limitation, not an oversight.
+13. **No content moderation (no admins and no user bans)**
