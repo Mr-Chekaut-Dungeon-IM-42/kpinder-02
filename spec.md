@@ -107,7 +107,7 @@ Notes:
 
 ### Profile management & photo upload (`auth`)
 1. `PATCH /auth/profile` — updates `User` fields (bio, interests, location, gender/seeking, age range) directly.
-2. `POST /auth/profile/photo` — validates content-type/magic bytes and size, writes to a local disk volume under a randomized UUID filename, stores the resulting `photo_url` on `User`.
+2. `POST /auth/profile/photo` — validates content-type/magic bytes and size, uploads to Cloudflare R2 under a randomized UUID object key (ADR-0010 — a local disk volume doesn't survive a Railway redeploy), stores the resulting object URL as `photo_url` on `User`.
 
 ### Swipe & match (`matching`)
 1. `GET /matching/candidates` — a single query: `User` + `UserInterests` eager-loaded via `selectinload` (one batched follow-up query for interests, never one-per-candidate), filtered by PostGIS radius (`ST_DWithin`) + gender/seeking + age range, excluding users already present in `SWIPE` via a `NOT EXISTS` subquery (not a separate "fetch swiped IDs, filter in Python" pass). Ranks the rest by Jaccard interest overlap.
@@ -138,7 +138,7 @@ A Postgres connection drop or query failure (not a business-logic error like a d
 - **Local**: `docker compose up` — Postgres+PostGIS, backend, frontend.
 - **CI**: GitHub Actions — `ruff`/`eslint`+`prettier`, backend unit tests, integration tests (real Postgres+PostGIS via testcontainers), frontend build. All required checks on every PR into `main`.
 - **Staging**: Railway, auto-deploys on every merge to `main`.
-- **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, JWT signing key) are never committed — `.env.example` only.
+- **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, JWT signing key, Cloudflare R2 account ID/access key/bucket — ADR-0010) are never committed — `.env.example` only.
 
 ## 6. Standards
 
