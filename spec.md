@@ -153,10 +153,27 @@ A Postgres connection drop or query failure (not a business-logic error like a d
 - **Staging**: Railway, auto-deploys on every merge to `main`.
 - **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, JWT signing key, Cloudflare R2 account ID/access key/bucket — ADR-0010) are never committed — `.env.example` only.
 
-## 6. Standards
+## 6. Testing strategy
+
+Four tiers, each with a distinct mechanical definition (not just a scope difference):
+
+| Tier | Mechanics | Real deps used |
+|---|---|---|
+| Unit | Repository mocked, service layer tested in isolation | None |
+| Integration | `httpx` `ASGITransport` in-process against the FastAPI app; WS via `TestClient.websocket_connect` | Real Postgres+PostGIS (testcontainers) |
+| E2E | Real running server (`docker compose`: backend container + Postgres), driven over actual HTTP/WS from outside (`websockets` client for WS) | Everything — real process, real network |
+
+- `matching/service.py` (swipe→match: append-only retry handling, insert-and-catch race resolution, Jaccard scoring) is the module targeted for full unit-test branch coverage — the richest conditional logic in the spec, and the one mutation testing is scoped to (ADR-0015).
+- E2E, API-level, full cross-slice journeys (signup → login → update profile → swipe both ways → match → send/edit/delete a message) — not browser automation, since there's no frontend yet (ADR-0016).
+- Mutation testing: `mutmut` (ADR-0015), run manually via `make mutation`, not a CI gate (ADR-0018). The surviving-mutant report classifies each survivor as a real test gap / an equivalent mutant / an acceptable gap, and feeds directly into the audit step (top-3 places the green suite doesn't catch a real bug) and `DEFENSE.md`.
+- See ADR-0017 for why integration and E2E differ mechanically, not just in scope, and ADR-0019 for the WS-specific tooling split.
+
+This section documents tooling/strategy decisions only — none of this has been implemented yet; actual test-writing follows once lab-2's scenarios (§3) are built (see `ai/prompts/`).
+
+## 7. Standards
 
 See `standards/` for ADR format (MADR), Definition of Done, and the audit checklist. ADRs are written only for genuinely contested decisions (vertical slices vs layered, shared-core boundary rule, Redis as event bus, WebSockets vs polling, PostGIS vs plain lat/lng, swipe+mutual-match vs auto-match, JWT vs sessions) — not for routine stack picks.
 
-## 7. AI trail
+## 8. AI trail
 
 This spec was shaped through an AI-assisted design interview. The full prompt trail is in [`ai/prompts/`](ai/prompts/), and a self-audit of where the AI's suggestions cut corners (and were corrected) is in [`ai/audit.md`](ai/audit.md) — each entry links the originating prompt, the human's correction, and the resulting change to this spec.
