@@ -13,5 +13,11 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 10080
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket_name: str | None = None
+    r2_public_base_url: str | None = None
+
 
 settings = Settings()
