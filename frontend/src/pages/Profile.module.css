@@ -1,0 +1,165 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  background: #fafafa;
+  padding: 2rem 1rem;
+}
+
+.card {
+  width: 100%;
+  max-width: 560px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 2rem;
+  height: fit-content;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.logout {
+  border: none;
+  background: transparent;
+  color: #e8457a;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.row {
+  display: flex;
+  gap: 1rem;
+}
+
+.row > .field {
+  flex: 1;
+}
+
+.field label {
+  font-size: 0.85rem;
+  color: #444;
+}
+
+.field input,
+.field select,
+.field textarea {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid #e8457a;
+  border-color: transparent;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #ccc;
+  background: white;
+  color: #444;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.chipSelected {
+  composes: chip;
+  background: #e8457a;
+  border-color: #e8457a;
+  color: white;
+}
+
+.photoRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.photoPreview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #eee;
+}
+
+.error {
+  color: #c0392b;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.success {
+  color: #1b7a3d;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.submit {
+  margin-top: 0.5rem;
+  padding: 0.7rem;
+  border: none;
+  border-radius: 8px;
+  background: #e8457a;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.secondary {
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid #e8457a;
+  background: white;
+  color: #e8457a;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

@@ -1,31 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+import { requestJson } from "./client";
 
-export class ApiError extends Error {
-  status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function request<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new ApiError(
-      response.status,
-      data?.detail ?? "Something went wrong. Please try again.",
-    );
-  }
-
-  return response.json() as Promise<T>;
-}
+export { ApiError } from "./client";
 
 export interface SignupPayload {
   email: string;
@@ -50,9 +25,9 @@ export interface TokenResponse {
 }
 
 export function signup(payload: SignupPayload): Promise<UserResponse> {
-  return request<UserResponse>("/auth/signup", payload);
+  return requestJson<UserResponse>("POST", "/auth/signup", payload);
 }
 
 export function login(payload: LoginPayload): Promise<TokenResponse> {
-  return request<TokenResponse>("/auth/login", payload);
+  return requestJson<TokenResponse>("POST", "/auth/login", payload);
 }
