@@ -17,6 +17,9 @@ async function handle<T>(response: Response): Promise<T> {
       data?.detail ?? "Something went wrong. Please try again.",
     );
   }
+  if (response.status === 204) {
+    return undefined as unknown as T;
+  }
   return response.json() as Promise<T>;
 }
 
