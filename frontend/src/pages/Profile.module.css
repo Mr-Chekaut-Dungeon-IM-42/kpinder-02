@@ -1,7 +1,8 @@
 .page {
   min-height: 100vh;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   background: #fafafa;
   padding: 2rem 1rem;
 }
@@ -111,6 +112,11 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.locationStatus {
+  font-size: 0.9rem;
+  color: #555;
 }
 
 .photoPreview {

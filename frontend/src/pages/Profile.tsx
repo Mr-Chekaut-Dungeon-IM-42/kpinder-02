@@ -12,25 +12,20 @@ import {
   type Seeking,
 } from "../api/profile";
 import { useAuth } from "../auth/AuthContext";
+import NavBar from "../components/NavBar";
 import styles from "./Profile.module.css";
 
 export default function Profile() {
-  const { token, logout } = useAuth();
+  const { token } = useAuth();
 
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  return <ProfileForm token={token} onLogout={logout} />;
+  return <ProfileForm token={token} />;
 }
 
-function ProfileForm({
-  token,
-  onLogout,
-}: {
-  token: string;
-  onLogout: () => void;
-}) {
+function ProfileForm({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [interests, setInterests] = useState<Interest[]>([]);
   const [selectedInterests, setSelectedInterests] = useState<Set<string>>(
@@ -43,11 +38,13 @@ function ProfileForm({
   const [ageMin, setAgeMin] = useState("");
   const [ageMax, setAgeMax] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [hasLocation, setHasLocation] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -77,6 +74,7 @@ function ProfileForm({
     setAgeMin(profile.age_min?.toString() ?? "");
     setAgeMax(profile.age_max?.toString() ?? "");
     setPhotoUrl(profile.photo_url);
+    setHasLocation(profile.has_location);
     setSelectedInterests(new Set(profile.interests));
   }
 
@@ -122,6 +120,45 @@ function ProfileForm({
     }
   }
 
+  function handleShareLocation() {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser.");
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const profile = await updateProfile(token, {
+            bio: bio.trim() === "" ? null : bio.trim(),
+            age: age === "" ? null : Number(age),
+            gender: gender === "" ? null : gender,
+            seeking: seeking === "" ? null : seeking,
+            age_min: ageMin === "" ? null : Number(ageMin),
+            age_max: ageMax === "" ? null : Number(ageMax),
+            interests: Array.from(selectedInterests),
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+          applyProfile(profile);
+          setSuccess("Location updated.");
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : "Failed to update location.",
+          );
+        } finally {
+          setLocating(false);
+        }
+      },
+      (geoError) => {
+        setError(geoError.message || "Failed to get your location.");
+        setLocating(false);
+      },
+    );
+  }
+
   async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -149,6 +186,7 @@ function ProfileForm({
   if (loading) {
     return (
       <div className={styles.page}>
+        <NavBar />
         <div className={styles.card}>Loading profile…</div>
       </div>
     );
@@ -156,12 +194,10 @@ function ProfileForm({
 
   return (
     <div className={styles.page}>
+      <NavBar />
       <div className={styles.card}>
         <div className={styles.header}>
           <h1 className={styles.title}>Your profile</h1>
-          <button className={styles.logout} onClick={onLogout}>
-            Log out
-          </button>
         </div>
 
         <div className={styles.photoRow}>
@@ -180,6 +216,20 @@ function ProfileForm({
               hidden
             />
           </label>
+        </div>
+
+        <div className={styles.photoRow}>
+          <span className={styles.locationStatus}>
+            {hasLocation ? "Location set" : "Location not set"}
+          </span>
+          <button
+            type="button"
+            className={styles.secondary}
+            onClick={handleShareLocation}
+            disabled={locating}
+          >
+            {locating ? "Locating…" : "Share my location"}
+          </button>
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit}>

@@ -20,6 +20,7 @@ export interface Profile {
   age_max: number | null;
   photo_url: string | null;
   interests: string[];
+  has_location: boolean;
 }
 
 export interface ProfileUpdatePayload {
@@ -30,6 +31,8 @@ export interface ProfileUpdatePayload {
   age_min: number | null;
   age_max: number | null;
   interests: string[];
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export function getInterests(): Promise<Interest[]> {
