@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -80,7 +81,11 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Message[] | null>(null);
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef<number | null>(null);
+  const isInitialLoadRef = useRef(true);
+
   const currentUserId = useMemo(() => parseUserId(token), [token]);
 
   const handleWsEvent = useCallback(
@@ -92,6 +97,14 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
 
       if (event.event === "new_message") {
         const newMsg = event.data as Message;
+        const container = containerRef.current;
+        const isNearBottom = container
+          ? container.scrollHeight -
+              container.scrollTop -
+              container.clientHeight <
+            150
+          : true;
+
         setMessages((prev) => {
           if (
             prev.some(
@@ -104,6 +117,12 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
           }
           return [...prev, newMsg];
         });
+
+        if (isNearBottom) {
+          requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          });
+        }
       } else if (event.event === "message_edited") {
         const edited = event.data as Message;
         setMessages((prev) =>
@@ -143,21 +162,36 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
     void load();
   }, [token, matchId]);
 
+  // Scroll to bottom only on initial load
   useEffect(() => {
-    if (!loading && !loadingOlder) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!loading && isInitialLoadRef.current) {
+      messagesEndRef.current?.scrollIntoView();
+      isInitialLoadRef.current = false;
     }
-  }, [messages.length, loading, loadingOlder]);
+  }, [loading]);
+
+  // Preserve scroll position when older messages are prepended
+  useLayoutEffect(() => {
+    if (prevScrollHeightRef.current !== null && containerRef.current) {
+      const newScrollHeight = containerRef.current.scrollHeight;
+      containerRef.current.scrollTop =
+        newScrollHeight - prevScrollHeightRef.current;
+      prevScrollHeightRef.current = null;
+    }
+  }, [messages]);
 
   async function handleLoadOlder() {
-    if (!cursor || loadingOlder) return;
+    if (!cursor || loadingOlder || !containerRef.current) return;
     setLoadingOlder(true);
+    prevScrollHeightRef.current = containerRef.current.scrollHeight;
+
     try {
       const page = await getMessages(token, matchId, cursor);
       // Prepend older messages
       setMessages((prev) => [...[...page.items].reverse(), ...prev]);
       setCursor(page.next_cursor);
     } catch (err) {
+      prevScrollHeightRef.current = null;
       setError(
         err instanceof Error ? err.message : "Failed to load older messages.",
       );
@@ -180,6 +214,9 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
         return [...prev, sent];
       });
       setInputContent("");
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message.");
     } finally {
@@ -292,7 +329,7 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
 
         {error && <p className={styles.error}>{error}</p>}
 
-        <div className={styles.messagesList}>
+        <div className={styles.messagesList} ref={containerRef}>
           {!searchResults && cursor && (
             <button
               className={styles.loadOlderBtn}
