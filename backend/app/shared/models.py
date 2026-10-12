@@ -59,3 +59,4 @@ class UserInterest(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="interests")
+    interest: Mapped["Interest"] = relationship(lazy="joined")
