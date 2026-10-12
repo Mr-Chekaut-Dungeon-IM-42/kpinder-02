@@ -89,8 +89,8 @@ async def upload_photo(
     user = await get_profile(db, user_id)
     data = await file.read()
     validate_image(data, file.content_type or "")
-    photo_url = await storage.upload(data, file.content_type or "")
-    user.photo_url = photo_url
+    key = await storage.upload(data, file.content_type or "")
+    user.photo_key = key
     await db.commit()
     await db.refresh(user)
     return user

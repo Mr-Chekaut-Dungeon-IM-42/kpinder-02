@@ -29,12 +29,12 @@ async def test_upload_photo_success():
     user = _user()
     file = _file(JPEG_BYTES, "image/jpeg")
     storage = AsyncMock()
-    storage.upload.return_value = "https://cdn.example.com/photo.jpg"
+    storage.upload.return_value = "abc123.jpg"
 
     with patch("app.auth.service.repository.get_user_by_id", return_value=user):
         result = await service.upload_photo(db, user.id, file, storage)
 
-    assert result.photo_url == "https://cdn.example.com/photo.jpg"
+    assert result.photo_key == "abc123.jpg"
     storage.upload.assert_awaited_once_with(JPEG_BYTES, "image/jpeg")
     db.commit.assert_awaited_once()
 

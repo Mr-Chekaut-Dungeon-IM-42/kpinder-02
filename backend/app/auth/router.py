@@ -17,12 +17,15 @@ from app.auth.schemas import (
 from app.shared.db import get_db
 from app.shared.jwt_dep import get_current_user_id
 from app.shared.models import User
-from app.shared.storage import PhotoStorage, get_photo_storage
+from app.shared.storage import PhotoStorage, get_photo_storage, resolve_photo_url
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _to_profile_response(user: User) -> ProfileResponse:
+async def _to_profile_response(user: User) -> ProfileResponse:
+    photo_url = None
+    if user.photo_key is not None:
+        photo_url = await resolve_photo_url(get_photo_storage(), user.photo_key)
     return ProfileResponse(
         id=user.id,
         email=user.email,
@@ -33,7 +36,7 @@ def _to_profile_response(user: User) -> ProfileResponse:
         seeking=user.seeking,
         age_min=user.age_min,
         age_max=user.age_max,
-        photo_url=user.photo_url,
+        photo_url=photo_url,
         interests=[ui.interest.name for ui in user.interests],
         has_location=user.location is not None,
     )
@@ -68,7 +71,7 @@ async def me(
     user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> ProfileResponse:
     user = await service.get_profile(db, user_id)
-    return _to_profile_response(user)
+    return await _to_profile_response(user)
 
 
 @router.patch("/update_profile", response_model=ProfileResponse)
@@ -78,7 +81,7 @@ async def update_profile(
     user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> ProfileResponse:
     user = await service.update_profile(db, user_id, data)
-    return _to_profile_response(user)
+    return await _to_profile_response(user)
 
 
 @router.post("/upload_photo", response_model=PhotoResponse)
@@ -89,4 +92,5 @@ async def upload_photo(
     storage: PhotoStorage = Depends(get_photo_storage),
 ) -> PhotoResponse:
     user = await service.upload_photo(db, user_id, file, storage)
-    return PhotoResponse(photo_url=user.photo_url)
+    photo_url = await storage.get_url(user.photo_key)
+    return PhotoResponse(photo_url=photo_url)
