@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret: str
     jwt_expire_minutes: int = 10080
+    cors_origins: list[str] = ["http://localhost:5173"]
 
 
 settings = Settings()
