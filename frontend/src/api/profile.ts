@@ -21,6 +21,7 @@ export interface Profile {
   photo_url: string | null;
   interests: string[];
   has_location: boolean;
+  location_label: string | null;
 }
 
 export interface ProfileUpdatePayload {
@@ -33,6 +34,7 @@ export interface ProfileUpdatePayload {
   interests: string[];
   latitude?: number | null;
   longitude?: number | null;
+  location_label?: string | null;
 }
 
 export function getInterests(): Promise<Interest[]> {

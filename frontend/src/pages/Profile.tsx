@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { ApiError } from "../api/client";
+import { reverseGeocode } from "../api/geocode";
 import {
   getInterests,
   getProfile,
@@ -39,6 +40,7 @@ function ProfileForm({ token }: { token: string }) {
   const [ageMax, setAgeMax] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [hasLocation, setHasLocation] = useState(false);
+  const [locationLabel, setLocationLabel] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -75,6 +77,7 @@ function ProfileForm({ token }: { token: string }) {
     setAgeMax(profile.age_max?.toString() ?? "");
     setPhotoUrl(profile.photo_url);
     setHasLocation(profile.has_location);
+    setLocationLabel(profile.location_label);
     setSelectedInterests(new Set(profile.interests));
   }
 
@@ -131,6 +134,10 @@ function ProfileForm({ token }: { token: string }) {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
+          const label = await reverseGeocode(
+            position.coords.latitude,
+            position.coords.longitude,
+          );
           const profile = await updateProfile(token, {
             bio: bio.trim() === "" ? null : bio.trim(),
             age: age === "" ? null : Number(age),
@@ -141,9 +148,12 @@ function ProfileForm({ token }: { token: string }) {
             interests: Array.from(selectedInterests),
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
+            location_label: label,
           });
           applyProfile(profile);
-          setSuccess("Location updated.");
+          setSuccess(
+            label ? `Location updated: ${label}` : "Location updated.",
+          );
         } catch (err) {
           setError(
             err instanceof Error ? err.message : "Failed to update location.",
@@ -220,7 +230,9 @@ function ProfileForm({ token }: { token: string }) {
 
         <div className={styles.photoRow}>
           <span className={styles.locationStatus}>
-            {hasLocation ? "Location set" : "Location not set"}
+            {hasLocation
+              ? `Location set${locationLabel ? `: ${locationLabel}` : ""}`
+              : "Location not set"}
           </span>
           <button
             type="button"
