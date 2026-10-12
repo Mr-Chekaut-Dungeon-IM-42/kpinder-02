@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DisconnectionError, OperationalError
 
 from app.auth.router import router as auth_router
+from app.matching.router import router as matching_router
 from app.shared.config import settings
 
 app = FastAPI(
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(matching_router)
 
 
 @app.exception_handler(OperationalError)
