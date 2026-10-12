@@ -44,6 +44,7 @@ class ProfileUpdateRequest(BaseModel):
     age_max: int | None = Field(default=None, ge=18, le=120)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    location_label: str | None = Field(default=None, max_length=200)
     interests: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -70,6 +71,7 @@ class ProfileResponse(BaseModel):
     photo_url: str | None
     interests: list[str]
     has_location: bool
+    location_label: str | None
 
     model_config = {"from_attributes": True}
 
