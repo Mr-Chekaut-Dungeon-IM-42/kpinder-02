@@ -18,6 +18,7 @@ from app.matching.schemas import (
 )
 from app.shared.config import settings
 from app.shared.models import User
+from app.shared.storage import get_photo_storage, resolve_photo_url
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
@@ -29,13 +30,16 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(union)
 
 
-def _to_candidate(user: User) -> CandidateResponse:
+async def _to_candidate(user: User) -> CandidateResponse:
+    photo_url = None
+    if user.photo_key is not None:
+        photo_url = await resolve_photo_url(get_photo_storage(), user.photo_key)
     return CandidateResponse(
         id=user.id,
         name=user.name,
         age=user.age,
         bio=user.bio,
-        photo_url=user.photo_url,
+        photo_url=photo_url,
         interests=[ui.interest.name for ui in user.interests],
     )
 
@@ -60,7 +64,7 @@ async def get_feed(db: AsyncSession, caller_id: uuid.UUID) -> list[CandidateResp
         return _jaccard(caller_interests, candidate_interests)
 
     scored = sorted(candidates, key=score, reverse=True)
-    return [_to_candidate(c) for c in scored[: settings.matching_feed_size]]
+    return [await _to_candidate(c) for c in scored[: settings.matching_feed_size]]
 
 
 async def swipe(
@@ -138,19 +142,21 @@ async def get_matches(
     ]
     users = await repository.get_users_by_ids(db, other_ids)
 
-    items = [
-        MatchResponse(
-            match_id=m.id,
-            created_at=m.created_at,
-            other_user=MatchUser(
-                id=other.id, name=other.name, photo_url=other.photo_url
-            ),
+    items = []
+    for m in matches:
+        other = users.get(m.user_b_id if m.user_a_id == caller_id else m.user_a_id)
+        if other is None:
+            continue
+        photo_url = None
+        if other.photo_key is not None:
+            photo_url = await resolve_photo_url(get_photo_storage(), other.photo_key)
+        items.append(
+            MatchResponse(
+                match_id=m.id,
+                created_at=m.created_at,
+                other_user=MatchUser(id=other.id, name=other.name, photo_url=photo_url),
+            )
         )
-        for m in matches
-        if (
-            other := users.get(m.user_b_id if m.user_a_id == caller_id else m.user_a_id)
-        )
-    ]
 
     next_cursor = None
     if len(matches) == limit:

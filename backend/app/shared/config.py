@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     r2_access_key_id: str | None = None
     r2_secret_access_key: str | None = None
     r2_bucket_name: str | None = None
-    r2_public_base_url: str | None = None
+    r2_presigned_url_ttl_seconds: int = 3600
 
     matching_radius_km: float = 50.0
     matching_feed_size: int = 20
