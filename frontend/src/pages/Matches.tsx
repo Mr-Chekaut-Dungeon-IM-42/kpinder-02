@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { getMatches, type Match } from "../api/matching";
 import { useAuth } from "../auth/AuthContext";
 import NavBar from "../components/NavBar";
@@ -65,14 +65,20 @@ function MatchesView({ token }: { token: string }) {
         ) : (
           <div className={styles.list}>
             {matches.map((match) => (
-              <div key={match.match_id} className={styles.item}>
+              <Link
+                key={match.match_id}
+                to={`/chat/${match.match_id}`}
+                state={{ otherUser: match.other_user }}
+                className={styles.itemLink}
+              >
                 <img
                   className={styles.photo}
                   src={match.other_user.photo_url ?? undefined}
                   alt=""
                 />
                 <span className={styles.name}>{match.other_user.name}</span>
-              </div>
+                <span className={styles.chatCta}>Chat →</span>
+              </Link>
             ))}
           </div>
         )}
