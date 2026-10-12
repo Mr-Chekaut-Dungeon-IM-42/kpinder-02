@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 import anyio
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import HTTPException, status
 
 from app.shared.config import settings
@@ -51,7 +52,18 @@ class R2PhotoStorage(PhotoStorage):
 
     async def upload(self, data: bytes, content_type: str) -> str:
         key = f"{uuid.uuid4()}.{_EXTENSIONS[content_type]}"
-        await anyio.to_thread.run_sync(self._put_object, key, data, content_type)
+        try:
+            await anyio.to_thread.run_sync(self._put_object, key, data, content_type)
+        except (BotoCoreError, ClientError) as exc:
+            # Never leak the underlying R2/transport error to the client —
+            # same "generic 503, no internal detail" pattern as the DB
+            # failure handler (spec.md §3). This also keeps the response
+            # inside FastAPI's normal exception-handling middleware (CORS
+            # headers still apply), unlike letting it propagate unhandled.
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Photo storage is unavailable",
+            ) from exc
         return f"{self._public_base_url}/{key}"
 
 
