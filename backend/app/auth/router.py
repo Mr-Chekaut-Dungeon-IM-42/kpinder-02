@@ -35,6 +35,7 @@ def _to_profile_response(user: User) -> ProfileResponse:
         age_max=user.age_max,
         photo_url=user.photo_url,
         interests=[ui.interest.name for ui in user.interests],
+        has_location=user.location is not None,
     )
 
 

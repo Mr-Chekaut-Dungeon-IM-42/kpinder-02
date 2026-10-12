@@ -42,6 +42,8 @@ class ProfileUpdateRequest(BaseModel):
     seeking: Literal["male", "female", "everyone"] | None = None
     age_min: int | None = Field(default=None, ge=18, le=120)
     age_max: int | None = Field(default=None, ge=18, le=120)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     interests: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -67,6 +69,7 @@ class ProfileResponse(BaseModel):
     age_max: int | None
     photo_url: str | None
     interests: list[str]
+    has_location: bool
 
     model_config = {"from_attributes": True}
 

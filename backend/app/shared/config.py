@@ -19,5 +19,8 @@ class Settings(BaseSettings):
     r2_bucket_name: str | None = None
     r2_public_base_url: str | None = None
 
+    matching_radius_km: float = 50.0
+    matching_feed_size: int = 20
+
 
 settings = Settings()

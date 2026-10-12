@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import HTTPException, UploadFile, status
+from geoalchemy2.elements import WKTElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,6 +74,10 @@ async def update_profile(
     user.seeking = data.seeking
     user.age_min = data.age_min
     user.age_max = data.age_max
+    if data.latitude is not None and data.longitude is not None:
+        user.location = WKTElement(
+            f"POINT({data.longitude} {data.latitude})", srid=4326
+        )
     await repository.replace_user_interests(db, user, interests)
     await db.commit()
     return user
