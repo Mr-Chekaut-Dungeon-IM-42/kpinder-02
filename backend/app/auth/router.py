@@ -39,6 +39,7 @@ async def _to_profile_response(user: User) -> ProfileResponse:
         photo_url=photo_url,
         interests=[ui.interest.name for ui in user.interests],
         has_location=user.location is not None,
+        location_label=user.location_label,
     )
 
 

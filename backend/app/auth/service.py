@@ -78,6 +78,7 @@ async def update_profile(
         user.location = WKTElement(
             f"POINT({data.longitude} {data.latitude})", srid=4326
         )
+        user.location_label = data.location_label
     await repository.replace_user_interests(db, user, interests)
     await db.commit()
     return user

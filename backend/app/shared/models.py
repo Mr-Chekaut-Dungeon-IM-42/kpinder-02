@@ -31,6 +31,7 @@ class User(Base):
     location: Mapped[str | None] = mapped_column(
         Geography(geometry_type="POINT", srid=4326), nullable=True
     )
+    location_label: Mapped[str | None] = mapped_column(String(200))
     photo_key: Mapped[str | None]
 
     interests: Mapped[list["UserInterest"]] = relationship(
