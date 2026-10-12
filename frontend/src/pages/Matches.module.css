@@ -35,6 +35,28 @@
   border-radius: 8px;
 }
 
+.itemLink {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.6rem;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.itemLink:hover {
+  background: #f7f7f7;
+}
+
+.chatCta {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: #e8457a;
+  font-weight: 500;
+}
+
 .photo {
   width: 48px;
   height: 48px;

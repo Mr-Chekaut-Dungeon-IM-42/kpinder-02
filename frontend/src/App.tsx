@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
+import Chat from "./pages/Chat";
 import Feed from "./pages/Feed";
 import Login from "./pages/Login";
 import Matches from "./pages/Matches";
@@ -13,6 +14,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Feed />} />
           <Route path="/matches" element={<Matches />} />
+          <Route path="/chat/:matchId" element={<Chat />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
