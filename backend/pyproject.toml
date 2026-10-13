@@ -39,8 +39,11 @@ packages = ["app"]
 testpaths = ["tests", "app"]
 pythonpath = ["."]
 asyncio_mode = "auto"
-markers = ["integration: requires Docker (testcontainers); excluded by default"]
-addopts = "-m 'not integration'"
+markers = [
+    "integration: requires Docker (testcontainers); excluded by default",
+    "e2e: black-box journey requiring running server; excluded by default",
+]
+addopts = "-m 'not integration and not e2e'"
 
 [tool.ruff]
 line-length = 88
