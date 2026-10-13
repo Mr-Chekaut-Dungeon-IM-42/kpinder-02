@@ -10,7 +10,7 @@ DEFENSE — Завдання 2: Робочий застосунок (прото�
 - **`matching` ніколи не штовхає live WS-подію при матчі — `chat` робить аналогічний push, `matching` — ні.** `spec.md` каже це двічі (§1 і §3.3.1 п.2): "pushes a live 'match' update directly to both users over the shared WS registry, if connected". `grep -rn "ws_manager" backend/app/matching/` — порожньо. Інший користувач дізнається про матч лише при наступному завантаженні `GET /matching/matches`, не миттєво. **Залишено задокументованим зрізом** — узгоджено з командою не виправляти в цьому проході (fix невеликий, ~10 рядків, перевикористовує `shared/ws.py`, який `chat` вже збудував).
 - **Жоден із 4 `except IntegrityError` не перевіряє, яке саме обмеження спрацювало — ADR-0009 прямо цього вимагає.** Розділ "Consequences" ADR-0009: *"Correctness depends on catching the specific unique-violation exception... and verifying its constraint name/columns match"*. Усі 4 місця (`auth.signup`, два в `matching.swipe`, `chat.send_message`) ловлять `IntegrityError` широко й визначають "вже існує" повторним запитом — без перевірки `exc.orig`. Сьогодні це безпечно "за виключенням" (FK-цілі завжди валідовані заздалегідь), але це саме та підміна міркування, проти якої застерігає ADR. **Залишено задокументованим зрізом** — невеликий, але наскрізний фікс (перевірка `constraint_name` у 4 місцях), свідомо не зроблений під час аудиту.
 
-Повний аудит (query correctness / N+1, поведінка на збоях DB/R2/WS) — `ai/audit.md`, розділ "Part B".
+Повний аудит (query correctness / N+1, поведінка на збоях DB/R2/WS) — `ai/audit/lab-2.md`, розділ "Part B".
 
 ## Ключове рішення — які альтернативи зважив і чому обрав цю (ADR):
 

@@ -32,7 +32,7 @@ tests/           — unit tests (repository mocked) + integration tests (real DB
 
 ### Cross-slice communication
 
-There is no event bus and no message broker. `matching` and `chat` are the only slices with anything to push live, and each does so directly over the shared WS registry to the other user involved — `chat`'s REST endpoints (send/edit/delete) are the source of truth for message state, and after each one commits, `chat` separately pushes the same event (new/edited/deleted message) to the other side's WS connection if registered, purely as a live-UI convenience. Nothing is persisted and nothing is delivered after the fact: an offline user simply sees the current state next time they call `GET /chat/{match_id}/messages`. A dedicated `notifications` slice, a Redis pub/sub event bus (`match.created`/`message.sent`), and a candidate-list cache were all designed and then deliberately cut from this MVP — see `ai/audit.md` and `standards/adr/0003-redis-event-bus.md` for why, and what would need to change to bring them back.
+There is no event bus and no message broker. `matching` and `chat` are the only slices with anything to push live, and each does so directly over the shared WS registry to the other user involved — `chat`'s REST endpoints (send/edit/delete) are the source of truth for message state, and after each one commits, `chat` separately pushes the same event (new/edited/deleted message) to the other side's WS connection if registered, purely as a live-UI convenience. Nothing is persisted and nothing is delivered after the fact: an offline user simply sees the current state next time they call `GET /chat/{match_id}/messages`. A dedicated `notifications` slice, a Redis pub/sub event bus (`match.created`/`message.sent`), and a candidate-list cache were all designed and then deliberately cut from this MVP — see `ai/audit/lab-2.md` and `standards/adr/0003-redis-event-bus.md` for why, and what would need to change to bring them back.
 
 ## 2. Data model
 
@@ -132,13 +132,13 @@ A Postgres connection drop or query failure (not a business-logic error like a d
 
 ## 4. Scoped out (documented, not built)
 
-- **Static-data prototype phase.** Lab-2's brief calls for implementing scenarios against static/in-memory data first, then swapping in the real DB. This project goes straight to DB integration (SQLAlchemy + Postgres+PostGIS from the start) instead — a deliberate, documented scope cut given the lab's timeline, not an oversight. See `ai/audit.md` Part A.
+- **Static-data prototype phase.** Lab-2's brief calls for implementing scenarios against static/in-memory data first, then swapping in the real DB. This project goes straight to DB integration (SQLAlchemy + Postgres+PostGIS from the start) instead — a deliberate, documented scope cut given the lab's timeline, not an oversight. See `ai/audit/lab-2.md` Part A.
 - **Unmatching / un-liking.** `SWIPE` is append-only (see §3); there is no endpoint or business rule that deletes a `MATCH` once created, and no way to retract a `like`.
 - Frontend tests (Vitest/RTL) — backend-only test coverage for this lab.
 - JWT refresh-token rotation, logout, and any server-side revocation mechanism — single long-lived access token, valid until natural expiry, no way to force-invalidate it early (ADR-0007, ADR-0014).
 - Multi-instance WebSocket scaling — connection registry is single-process.
 - Rate limiting / abuse prevention.
-- `notifications` slice, persisted/offline notifications, and any event bus or message broker (Redis or otherwise) — `matching`/`chat` push live over the shared WS registry only; nothing is queued, persisted, or delivered to an offline user. See `ai/audit.md` for the fuller design this replaced and why it was cut.
+- `notifications` slice, persisted/offline notifications, and any event bus or message broker (Redis or otherwise) — `matching`/`chat` push live over the shared WS registry only; nothing is queued, persisted, or delivered to an offline user. See `ai/audit/lab-2.md` for the fuller design this replaced and why it was cut.
 - Candidate-list caching — `matching` queries Postgres directly on every request; no cache layer.
 - Cursor/offset pagination beyond a fixed page size on `GET /matching/feed` — a fixed `LIMIT` (top ~20-50 by score), not full pagination; unlike matches/messages, the feed isn't a stable list a user scrolls back through.
 - Email verification on signup — an account is active immediately after `POST /auth/signup`.
@@ -159,4 +159,4 @@ See `standards/` for ADR format (MADR), Definition of Done, and the audit checkl
 
 ## 7. AI trail
 
-This spec was shaped through an AI-assisted design interview. The full prompt trail is in [`ai/prompts/`](ai/prompts/), and a self-audit of where the AI's suggestions cut corners (and were corrected) is in [`ai/audit.md`](ai/audit.md) — each entry links the originating prompt, the human's correction, and the resulting change to this spec.
+This spec was shaped through an AI-assisted design interview. The full prompt trail is in [`ai/prompts/`](ai/prompts/), and a self-audit of where the AI's suggestions cut corners (and were corrected) is in [`ai/audit/lab-2.md`](ai/audit/lab-2.md) — each entry links the originating prompt, the human's correction, and the resulting change to this spec.
