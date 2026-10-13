@@ -56,7 +56,11 @@ async def get_candidates(
         conditions.append(or_(User.age.is_(None), User.age <= caller.age_max))
 
     result = await db.execute(
-        select(User).where(and_(*conditions)).options(selectinload(User.interests))
+        select(User)
+        .where(and_(*conditions))
+        .options(selectinload(User.interests))
+        .order_by(User.id)
+        .limit(limit)
     )
     return list(result.scalars())
 

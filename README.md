@@ -59,4 +59,4 @@ See [`backend/README.md`](backend/README.md) for backend-specific commands (lint
 
 ## AI trail
 
-This project's architecture was shaped through an AI-assisted design interview. The full prompt trail is in [`ai/prompts/`](ai/prompts/); [`ai/audit.md`](ai/audit.md) tracks both the AI's own corner-cutting (and how it was corrected) and the scope the team deliberately cut from the design described in `spec.md` to keep the MVP appropriately sized.
+This project's architecture was shaped through an AI-assisted design interview. The full prompt trail is in [`ai/prompts/`](ai/prompts/); [`ai/audit/lab-2.md`](ai/audit/lab-2.md) tracks both the AI's own corner-cutting (and how it was corrected) and the scope the team deliberately cut from the design described in `spec.md` to keep the MVP appropriately sized.
