@@ -51,3 +51,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query"]
+
+[tool.mutmut]
+source_paths = ["app/chat/service.py"]
+pytest_add_cli_args_test_selection = ["app/chat/tests/test_service.py"]
+also_copy = ["app"]

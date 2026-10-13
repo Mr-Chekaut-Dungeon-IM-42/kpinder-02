@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -29,6 +29,7 @@ def _make_message(
     sender_id: uuid.UUID,
     content: str = "Hello",
     client_message_id: uuid.UUID | None = None,
+    created_at: datetime | None = None,
 ) -> Message:
     return Message(
         id=uuid.uuid4(),
@@ -36,7 +37,7 @@ def _make_message(
         sender_id=sender_id,
         client_message_id=client_message_id or uuid.uuid4(),
         content=content,
-        created_at=datetime.now(UTC),
+        created_at=created_at or datetime.now(UTC),
         edited_at=None,
     )
 
@@ -219,12 +220,16 @@ async def test_get_messages_happy_path_fewer_than_limit():
 
     with (
         patch("app.chat.service.repository.get_match", return_value=match),
-        patch("app.chat.service.repository.get_messages_page", return_value=messages),
+        patch(
+            "app.chat.service.repository.get_messages_page", return_value=messages
+        ) as mock_get_page,
     ):
-        page = await service.get_messages(db, user_a, match.id, cursor=None, limit=20)
+        page = await service.get_messages(db, user_a, match.id, cursor=None)
 
     assert len(page.items) == 5
     assert page.next_cursor is None
+    # Verifies default limit=20 was passed to repository
+    mock_get_page.assert_awaited_once_with(db, match.id, None, None, 20)
 
 
 @pytest.mark.asyncio
@@ -232,18 +237,28 @@ async def test_get_messages_generates_next_cursor_when_limit_reached():
     db = AsyncMock()
     user_a, user_b = uuid.uuid4(), uuid.uuid4()
     match = _make_match(user_a_id=user_a, user_b_id=user_b)
-    messages = [_make_message(match.id, user_a, f"Msg {i}") for i in range(20)]
+    base_time = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    messages = [
+        _make_message(
+            match.id,
+            user_a,
+            f"Msg {i}",
+            created_at=base_time + timedelta(seconds=i),
+        )
+        for i in range(20)
+    ]
 
     with (
         patch("app.chat.service.repository.get_match", return_value=match),
         patch("app.chat.service.repository.get_messages_page", return_value=messages),
     ):
-        page = await service.get_messages(db, user_a, match.id, cursor=None, limit=20)
+        page = await service.get_messages(db, user_a, match.id, cursor=None)
 
     assert len(page.items) == 20
     assert page.next_cursor is not None
     dt, msg_id = service._decode_cursor(page.next_cursor)
     assert msg_id == messages[-1].id
+    assert dt == messages[-1].created_at
 
 
 @pytest.mark.asyncio
