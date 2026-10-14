@@ -14,7 +14,7 @@ Backend is organized as **vertical slices** — one bounded context per feature,
 
 `shared/` (core) is not a slice — it's infrastructure every slice depends on, and never the other way around:
 - DB session factory
-- JWT-verify dependency (identifies the current user for any slice's router; a pure signature/expiry check, no DB access — ADR-0014)
+- JWT-verify dependency (identifies the current user for any slice's router; a pure signature/expiry check, no DB access — ADR-0013)
 - WebSocket connection registry (`user_id → connection`, in-memory, single-process)
 - Core data models: `User`, `Interest`, `UserInterests`
 
@@ -106,7 +106,7 @@ Notes:
 ### Signup & login (`auth`)
 1. `POST /auth/signup` — validates input, hashes password, inserts a `User` row. Concurrent signups for the same email are handled by inserting and catching the `email` unique-constraint violation — not a check-then-insert — and returning `409 Conflict`. This is the same idiom used for swipe/match (below) and message dedup: let the DB's unique constraint be the single source of truth for "does this already exist," never a SELECT-then-INSERT with a TOCTOU gap.
 2. `POST /auth/login` — verifies credentials, issues a JWT (single long-lived access token, no refresh rotation for MVP).
-3. There is no `/auth/logout` endpoint and no server-side token revocation (ADR-0014) — a leaked or shared-device token remains valid until it naturally expires. "Logging out" is purely a frontend concern (the client discards its stored token); this isn't exposed as a backend endpoint since it isn't backend-meaningful (ADR-0014).
+3. There is no `/auth/logout` endpoint and no server-side token revocation (ADR-0013) — a leaked or shared-device token remains valid until it naturally expires. "Logging out" is purely a frontend concern (the client discards its stored token); this isn't exposed as a backend endpoint since it isn't backend-meaningful (ADR-0013).
 4. All other slices' routers depend on the shared JWT-verify dependency to identify the caller — a pure signature/expiry check, no DB access — none re-implement auth.
 
 ### Profile update & photo upload (`auth`)
@@ -135,7 +135,7 @@ A Postgres connection drop or query failure (not a business-logic error like a d
 - **Static-data prototype phase.** Lab-2's brief calls for implementing scenarios against static/in-memory data first, then swapping in the real DB. This project goes straight to DB integration (SQLAlchemy + Postgres+PostGIS from the start) instead — a deliberate, documented scope cut given the lab's timeline, not an oversight. See `ai/audit/lab-2.md` Part A.
 - **Unmatching / un-liking.** `SWIPE` is append-only (see §3); there is no endpoint or business rule that deletes a `MATCH` once created, and no way to retract a `like`.
 - Frontend tests (Vitest/RTL) — backend-only test coverage for this lab.
-- JWT refresh-token rotation, logout, and any server-side revocation mechanism — single long-lived access token, valid until natural expiry, no way to force-invalidate it early (ADR-0007, ADR-0014).
+- JWT refresh-token rotation, logout, and any server-side revocation mechanism — single long-lived access token, valid until natural expiry, no way to force-invalidate it early (ADR-0007, ADR-0013).
 - Multi-instance WebSocket scaling — connection registry is single-process.
 - Rate limiting / abuse prevention.
 - `notifications` slice, persisted/offline notifications, and any event bus or message broker (Redis or otherwise) — `matching`/`chat` push live over the shared WS registry only; nothing is queued, persisted, or delivered to an offline user. See `ai/audit/lab-2.md` for the fuller design this replaced and why it was cut.
@@ -163,12 +163,12 @@ Four tiers, each with a distinct mechanical definition (not just a scope differe
 | Integration | `httpx` `ASGITransport` in-process against the FastAPI app; WS via `TestClient.websocket_connect` | Real Postgres+PostGIS (testcontainers) |
 | E2E | Real running server (`docker compose`: backend container + Postgres), driven over actual HTTP/WS from outside (`websockets` client for WS) | Everything — real process, real network |
 
-- `matching/service.py` (swipe→match: append-only retry handling, insert-and-catch race resolution, Jaccard scoring) is the module targeted for full unit-test branch coverage — the richest conditional logic in the spec, and the one mutation testing is scoped to (ADR-0015).
-- E2E, API-level, full cross-slice journeys (signup → login → update profile → swipe both ways → match → send/edit/delete a message) — not browser automation, since there's no frontend yet (ADR-0016).
-- Mutation testing: `mutmut` (ADR-0015), run manually via `make mutation`, not a CI gate (ADR-0018). The surviving-mutant report classifies each survivor as a real test gap / an equivalent mutant / an acceptable gap, and feeds directly into the audit step (top-3 places the green suite doesn't catch a real bug) and `DEFENSE.md`.
-- See ADR-0017 for why integration and E2E differ mechanically, not just in scope, and ADR-0019 for the WS-specific tooling split.
+- `matching/service.py` (swipe→match: append-only retry handling, insert-and-catch race resolution, Jaccard scoring) was the first module targeted for full unit-test branch coverage — the richest conditional logic in the spec — and mutation testing scoping followed the same per-module approach (ADR-0014); `chat/service.py` and `auth/service.py` were brought to full branch coverage and mutation-tested the same way, so all three vertical slices now have both.
+- E2E, API-level, full cross-slice journeys (signup → login → update profile → swipe both ways → match → send/edit/delete a message) — not browser automation, since there's no frontend yet (ADR-0015).
+- Mutation testing: `mutmut` (ADR-0014), run manually via `make mutation`, not a CI gate (ADR-0017). The surviving-mutant report classifies each survivor as a real test gap / an equivalent mutant / an acceptable gap, and feeds directly into the audit step (top-3 places the green suite doesn't catch a real bug) and `DEFENSE.md`.
+- See ADR-0016 for why integration and E2E differ mechanically, not just in scope, and ADR-0018 for the WS-specific tooling split.
 
-This section documents tooling/strategy decisions only — none of this has been implemented yet; actual test-writing follows once lab-2's scenarios (§3) are built (see `ai/prompts/`).
+All four tiers are now implemented against `auth`, `matching`, and `chat`: unit tests give all three services full branch coverage, integration tests run against real Postgres+PostGIS via testcontainers, an API-level E2E journey covers the full cross-slice flow, and `mutmut` has been run against all three — see `ai/audit/lab-3.md` for the mutation report and the real-test-gap audit.
 
 ## 7. Standards
 
