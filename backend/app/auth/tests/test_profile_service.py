@@ -6,8 +6,8 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.auth import service
+from app.auth.models import Interest, User
 from app.auth.schemas import ProfileUpdateRequest
-from app.shared.models import Interest, User
 
 
 def _user(**kwargs) -> User:

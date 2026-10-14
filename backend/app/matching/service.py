@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.models import User
 from app.matching import repository
 from app.matching.schemas import (
     CandidateResponse,
@@ -17,7 +18,6 @@ from app.matching.schemas import (
     SwipeResponse,
 )
 from app.shared.config import settings
-from app.shared.models import User
 from app.shared.storage import get_photo_storage, resolve_photo_url
 
 

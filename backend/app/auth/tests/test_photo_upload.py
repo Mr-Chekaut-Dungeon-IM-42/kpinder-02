@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.auth import service
-from app.shared.models import User
+from app.auth.models import User
 
 JPEG_BYTES = b"\xff\xd8\xff" + b"rest-of-jpeg"
 

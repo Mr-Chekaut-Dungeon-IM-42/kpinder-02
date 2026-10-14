@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import repository
+from app.auth.models import User
 from app.auth.schemas import (
     LoginRequest,
     ProfileUpdateRequest,
@@ -13,7 +14,6 @@ from app.auth.schemas import (
     TokenResponse,
 )
 from app.shared.image_validation import validate_image
-from app.shared.models import User
 from app.shared.security import create_access_token, hash_password, verify_password
 from app.shared.storage import PhotoStorage
 

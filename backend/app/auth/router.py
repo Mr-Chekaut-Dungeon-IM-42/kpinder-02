@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import service
+from app.auth.models import User
 from app.auth.schemas import (
     InterestResponse,
     LoginRequest,
@@ -16,7 +17,6 @@ from app.auth.schemas import (
 )
 from app.shared.db import get_db
 from app.shared.jwt_dep import get_current_user_id
-from app.shared.models import User
 from app.shared.storage import PhotoStorage, get_photo_storage, resolve_photo_url
 
 router = APIRouter(prefix="/auth", tags=["auth"])

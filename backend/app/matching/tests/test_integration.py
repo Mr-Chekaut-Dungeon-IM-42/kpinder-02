@@ -7,9 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
+from app.auth.models import Base, User
 from app.matching import repository
 from app.matching.models import Match
-from app.shared.models import Base, User
 
 pytestmark = pytest.mark.integration
 

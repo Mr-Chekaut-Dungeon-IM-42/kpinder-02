@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from app.auth import service
+from app.auth.models import Base
 from app.auth.schemas import SignupRequest
-from app.shared.models import Base
 
 pytestmark = pytest.mark.integration
 

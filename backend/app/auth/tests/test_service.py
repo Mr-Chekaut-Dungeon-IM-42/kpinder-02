@@ -6,8 +6,8 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.auth import service
+from app.auth.models import User
 from app.auth.schemas import LoginRequest, SignupRequest
-from app.shared.models import User
 from app.shared.security import hash_password
 
 

@@ -5,10 +5,10 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.models import Interest, User, UserInterest
 from app.matching import service
 from app.matching.models import Match, Swipe
 from app.matching.schemas import SwipeRequest
-from app.shared.models import Interest, User, UserInterest
 
 
 def _user(**kwargs) -> User:
