@@ -24,10 +24,7 @@ from app.shared.storage import get_photo_storage, resolve_photo_url
 def _jaccard(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 0.0
-    union = a | b
-    if not union:
-        return 0.0
-    return len(a & b) / len(union)
+    return len(a & b) / len(a | b)
 
 
 async def _to_candidate(user: User) -> CandidateResponse:
