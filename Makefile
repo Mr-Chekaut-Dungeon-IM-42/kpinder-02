@@ -3,17 +3,11 @@
 lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .
 
-test: test-unit
-
 test-unit:
 	cd backend && uv run pytest -q
 
-test-int: test-integration
-
 test-integration:
 	cd backend && uv run pytest -q -m integration
-
-test-mut: mutation
 
 mutation:
 	cd backend && \
