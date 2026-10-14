@@ -5,7 +5,7 @@
 
 ## Context
 
-`mutmut` (ADR-0015) re-runs the relevant test file(s) once per surviving candidate mutant, which scales with the number of mutable branches in the target module(s) — materially slower than a normal test run, and slower again than the existing integration-test CI job. The lab wants a mutation report with surviving mutants classified (real gap / equivalent / acceptable) for `DEFENSE.md`, reproducible via `make mutation` — it doesn't ask for mutation testing to gate every PR.
+`mutmut` (ADR-0014) re-runs the relevant test file(s) once per surviving candidate mutant, which scales with the number of mutable branches in the target module(s) — materially slower than a normal test run, and slower again than the existing integration-test CI job. The lab wants a mutation report with surviving mutants classified (real gap / equivalent / acceptable) for `DEFENSE.md`, reproducible via `make mutation` — it doesn't ask for mutation testing to gate every PR.
 
 ## Decision
 

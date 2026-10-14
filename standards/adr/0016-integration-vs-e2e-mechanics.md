@@ -5,7 +5,7 @@
 
 ## Context
 
-The brief requires integration tests to run "with dependencies raised: DB, HTTP server" and separately requires E2E (ADR-0016: black-box, full cross-slice journeys). Both tiers touch a real database and a real HTTP surface, so the two need a mechanical distinction beyond scope alone, or "integration" and "E2E" become indistinguishable in practice.
+The brief requires integration tests to run "with dependencies raised: DB, HTTP server" and separately requires E2E (ADR-0015: black-box, full cross-slice journeys). Both tiers touch a real database and a real HTTP surface, so the two need a mechanical distinction beyond scope alone, or "integration" and "E2E" become indistinguishable in practice.
 
 ## Decision
 
@@ -17,4 +17,4 @@ Running both tiers the same way (always a real separate server process + docker 
 
 ## Consequences
 
-Two distinct pieces of test infrastructure to maintain instead of one: `testcontainers`-backed fixtures for integration tests, and a `docker compose`-based harness for E2E. Integration tests stay fast enough to run routinely (CI on every PR, per the existing DoD); E2E tests are slower and heavier, closer to the cost profile that justifies the mutation-testing-stays-manual decision (ADR-0018) rather than running on every push. The real payoff: E2E is the only tier that would catch e.g. a missing environment variable in the Railway deploy config or a Docker networking misconfiguration, which in-process ASGI tests structurally cannot.
+Two distinct pieces of test infrastructure to maintain instead of one: `testcontainers`-backed fixtures for integration tests, and a `docker compose`-based harness for E2E. Integration tests stay fast enough to run routinely (CI on every PR, per the existing DoD); E2E tests are slower and heavier, closer to the cost profile that justifies the mutation-testing-stays-manual decision (ADR-0017) rather than running on every push. The real payoff: E2E is the only tier that would catch e.g. a missing environment variable in the Railway deploy config or a Docker networking misconfiguration, which in-process ASGI tests structurally cannot.

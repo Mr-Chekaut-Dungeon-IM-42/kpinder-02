@@ -9,7 +9,7 @@ Lab-3 names E2E as a distinct tier from integration tests. The frontend (README:
 
 ## Decision
 
-E2E means black-box, API-level, full user-journey tests: drive the running backend only through its public HTTP/WS surface (no internal imports, no mocking of any kind), chaining a realistic multi-step journey across slices — signup → login → update profile → swipe both directions → match → send/edit/delete a message — against a fully running app and a real Postgres. The distinguishing property from integration tests (ADR-0017) isn't "uses real dependencies" (both tiers do) — it's *scope*: one cross-slice journey exercising the system the way an external client actually would, versus one endpoint/slice at a time.
+E2E means black-box, API-level, full user-journey tests: drive the running backend only through its public HTTP/WS surface (no internal imports, no mocking of any kind), chaining a realistic multi-step journey across slices — signup → login → update profile → swipe both directions → match → send/edit/delete a message — against a fully running app and a real Postgres. The distinguishing property from integration tests (ADR-0016) isn't "uses real dependencies" (both tiers do) — it's *scope*: one cross-slice journey exercising the system the way an external client actually would, versus one endpoint/slice at a time.
 
 ## Alternatives considered
 

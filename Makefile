@@ -16,7 +16,10 @@ test-integration:
 test-mut: mutation
 
 mutation:
-	cd backend && uv run --with mutmut mutmut run
+	cd backend && \
+	DATABASE_URL=$${DATABASE_URL:-postgresql+asyncpg://kpinder:kpinder@localhost:5433/kpinder} \
+	JWT_SECRET=$${JWT_SECRET:-mutmut-dummy-secret} \
+	uv run --with mutmut mutmut run
 
 test-e2e:
 	cd backend && uv run pytest -q -m e2e
