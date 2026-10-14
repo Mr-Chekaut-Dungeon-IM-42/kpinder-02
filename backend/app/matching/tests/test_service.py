@@ -49,7 +49,9 @@ async def test_get_feed_unknown_caller_raises_404():
 async def test_get_feed_resolves_photo_url_for_candidate_with_photo():
     db = AsyncMock()
     caller = _with_interests(_user(location="POINT"), "hiking")
-    candidate = _with_interests(_user(photo_key="some-key.jpg"), "hiking")
+    candidate = _with_interests(
+        _user(photo_key="some-key.jpg", age=29, bio="Hello"), "hiking"
+    )
 
     with (
         patch(
@@ -69,6 +71,11 @@ async def test_get_feed_resolves_photo_url_for_candidate_with_photo():
         result = await service.get_feed(db, caller.id)
 
     assert result[0].photo_url == "https://example.com/photo.jpg"
+    # age/bio were being set but never asserted anywhere in the feed tests —
+    # a mutant that dropped either to None on CandidateResponse survived
+    # undetected.
+    assert result[0].age == 29
+    assert result[0].bio == "Hello"
     resolve_mock.assert_awaited_once_with("storage", "some-key.jpg")
 
 
@@ -107,6 +114,38 @@ async def test_get_feed_sorts_by_interest_overlap():
         result = await service.get_feed(db, caller.id)
 
     assert [c.id for c in result] == [high.id, low.id]
+
+
+@pytest.mark.asyncio
+async def test_get_feed_ranks_by_jaccard_ratio_not_raw_intersection_size():
+    """A candidate with a smaller raw overlap but a much smaller interest set
+    (a tighter *ratio*) must outrank one with a larger overlap buried in a
+    big, mostly-unrelated interest set. `len(a & b) / len(a | b)` and
+    `len(a & b) * len(a | b)` agree on every two-candidate case the previous
+    test used, so a mutant swapping division for multiplication survived —
+    this data specifically makes the two formulas disagree on ranking order."""
+    db = AsyncMock()
+    caller = _with_interests(_user(location="POINT"), "a", "b", "c")
+    # tight_fit: overlap=2, union=3 -> jaccard 0.667, product 6
+    tight_fit = _with_interests(_user(), "a", "b")
+    # broad_overlap: overlap=3, union=10 -> jaccard 0.3, product 30
+    broad_overlap = _with_interests(
+        _user(), "a", "b", "c", "d", "e", "f", "g", "h", "i", "j"
+    )
+
+    with (
+        patch(
+            "app.matching.service.repository.get_user_with_interests",
+            return_value=caller,
+        ),
+        patch(
+            "app.matching.service.repository.get_candidates",
+            return_value=[broad_overlap, tight_fit],
+        ),
+    ):
+        result = await service.get_feed(db, caller.id)
+
+    assert [c.id for c in result] == [tight_fit.id, broad_overlap.id]
 
 
 @pytest.mark.asyncio
@@ -183,6 +222,34 @@ async def test_swipe_idempotent_same_decision_retry():
     assert result.matched is True
     assert result.match_id == match.id
     db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_swipe_idempotent_pass_retry_has_no_match():
+    """A 'pass' can never produce a match, so an idempotent pass-retry must
+    resolve matched=False/match_id=None via `get_match_between` returning
+    None — without this, `match.id if match else None` was never exercised
+    with match=None, so a mutant that forces that ternary always-truthy
+    (`if (match) or True`) survived undetected; with match=None it would
+    crash on `None.id` instead of returning None."""
+    db = AsyncMock()
+    caller_id, target_id = uuid.uuid4(), uuid.uuid4()
+    data = SwipeRequest(target_id=target_id, decision="pass")
+    existing = Swipe(swiper_id=caller_id, swiped_id=target_id, decision="pass")
+
+    with (
+        patch("app.matching.service.repository.user_exists", return_value=True),
+        patch(
+            "app.matching.service.repository.create_swipe",
+            side_effect=IntegrityError("stmt", {}, Exception("dup")),
+        ),
+        patch("app.matching.service.repository.get_swipe", return_value=existing),
+        patch("app.matching.service.repository.get_match_between", return_value=None),
+    ):
+        result = await service.swipe(db, caller_id, data)
+
+    assert result.matched is False
+    assert result.match_id is None
 
 
 @pytest.mark.asyncio
@@ -377,6 +444,37 @@ async def test_get_matches_skips_match_when_other_user_missing():
 
 
 @pytest.mark.asyncio
+async def test_get_matches_continues_past_missing_user_to_later_matches():
+    """A missing 'other' user must only skip *that one* match, not abort the
+    page — `continue` is required here, not `break`. With only one match in
+    the page (as in the sibling test above), both statements leave an empty
+    `page.items`, so a mutant that swapped `continue` for `break` survived:
+    this test puts a valid match *after* the missing one so the two diverge
+    — `break` would silently drop every match that follows a single missing
+    user, truncating the whole page instead of skipping one row."""
+    db = AsyncMock()
+    caller_id = uuid.uuid4()
+    missing_match = _match(user_a_id=caller_id, user_b_id=uuid.uuid4())
+    other = _user()
+    present_match = _match(user_a_id=caller_id, user_b_id=other.id)
+
+    with (
+        patch(
+            "app.matching.service.repository.get_matches_page",
+            return_value=[missing_match, present_match],
+        ),
+        patch(
+            "app.matching.service.repository.get_users_by_ids",
+            return_value={other.id: other},
+        ),
+    ):
+        page = await service.get_matches(db, caller_id, cursor=None)
+
+    assert len(page.items) == 1
+    assert page.items[0].other_user.id == other.id
+
+
+@pytest.mark.asyncio
 async def test_get_matches_resolves_photo_url_when_other_has_photo():
     db = AsyncMock()
     caller_id = uuid.uuid4()
@@ -439,6 +537,26 @@ async def test_get_matches_no_next_cursor_when_page_not_full():
         page = await service.get_matches(db, caller_id, cursor=None, limit=20)
 
     assert page.next_cursor is None
+
+
+@pytest.mark.asyncio
+async def test_get_matches_uses_default_limit_of_twenty():
+    """Every other get_matches test passes limit=20 explicitly, so the
+    default-parameter contract (`limit: int = 20`) itself was never
+    exercised — a mutant changing the default to 21 survived undetected.
+    This test omits `limit` so execution depends entirely on the default."""
+    db = AsyncMock()
+    caller_id = uuid.uuid4()
+
+    with (
+        patch(
+            "app.matching.service.repository.get_matches_page", return_value=[]
+        ) as get_page_mock,
+        patch("app.matching.service.repository.get_users_by_ids", return_value={}),
+    ):
+        await service.get_matches(db, caller_id, cursor=None)
+
+    get_page_mock.assert_awaited_once_with(db, caller_id, None, None, 20)
 
 
 @pytest.mark.asyncio

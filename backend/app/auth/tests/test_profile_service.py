@@ -28,7 +28,15 @@ async def test_update_profile_success():
     db = AsyncMock()
     user = _user()
     interest = Interest(id=uuid.uuid4(), name="hiking")
-    data = ProfileUpdateRequest(bio="hi", age=28, interests=["hiking"])
+    data = ProfileUpdateRequest(
+        bio="hi",
+        age=28,
+        gender="female",
+        seeking="male",
+        age_min=25,
+        age_max=35,
+        interests=["hiking"],
+    )
 
     with (
         patch("app.auth.service.repository.get_user_by_id", return_value=user),
@@ -40,8 +48,15 @@ async def test_update_profile_success():
     ):
         result = await service.update_profile(db, user.id, data)
 
+    # Every scalar field update_profile assigns must actually land on the
+    # user — a prior version of this test only checked bio/age, so a mutant
+    # that dropped gender/seeking/age_min/age_max to None survived unnoticed.
     assert result.bio == "hi"
     assert result.age == 28
+    assert result.gender == "female"
+    assert result.seeking == "male"
+    assert result.age_min == 25
+    assert result.age_max == 35
     replace.assert_awaited_once_with(db, user, [interest])
     db.commit.assert_awaited_once()
 
@@ -105,6 +120,32 @@ async def test_update_profile_sets_location_when_lat_lng_provided():
     assert result.location is not None
     assert "30.52" in str(result.location.data)
     assert "50.45" in str(result.location.data)
+    # SRID 4326 (WGS 84) is what every ST_DWithin/radius query in matching
+    # assumes. A wrong SRID doesn't raise here — WKTElement just stores it —
+    # so without this assertion a corrupted constant would pass every test
+    # and silently break every geospatial query in production.
+    assert result.location.srid == 4326
+
+
+@pytest.mark.asyncio
+async def test_update_profile_requires_both_latitude_and_longitude():
+    """Only one of latitude/longitude provided must not set location at all —
+    `and` is required here, not `or`: with `or`, WKTElement would be built
+    with a None coordinate (e.g. "POINT(30.52 None)"), which doesn't fail at
+    construction time and would only surface as a cryptic Postgres error
+    much later."""
+    db = AsyncMock()
+    user = _user()
+    data = ProfileUpdateRequest(latitude=50.45, interests=[])
+
+    with (
+        patch("app.auth.service.repository.get_user_by_id", return_value=user),
+        patch("app.auth.service.repository.get_interests_by_names", return_value=[]),
+        patch("app.auth.service.repository.replace_user_interests"),
+    ):
+        result = await service.update_profile(db, user.id, data)
+
+    assert result.location is None
 
 
 @pytest.mark.asyncio

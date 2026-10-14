@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app.auth import service
 from app.auth.schemas import LoginRequest, SignupRequest
 from app.shared.models import User
-from app.shared.security import hash_password
+from app.shared.security import decode_access_token, hash_password
 
 
 @pytest.mark.asyncio
@@ -55,6 +55,12 @@ async def test_login_success():
         )
     assert token.token_type == "bearer"
     assert token.access_token
+    # The token's subject must be *this* user's id — a prior version of this
+    # test only checked that some token came back, so a mutant that passed
+    # `subject=None` (or `str(None)`) to create_access_token survived
+    # undetected: the minted token would be well-formed but useless (every
+    # subsequent authenticated request would 401 on an unparseable subject).
+    assert decode_access_token(token.access_token) == str(user.id)
 
 
 @pytest.mark.asyncio
