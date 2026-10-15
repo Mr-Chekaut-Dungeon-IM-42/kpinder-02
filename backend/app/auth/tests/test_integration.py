@@ -23,11 +23,13 @@ def postgres_url():
         yield test_db_env
         return
 
+    test_host = os.getenv("TEST_DB_HOST", os.getenv("DB_HOST", "localhost"))
+    test_port = int(os.getenv("TEST_DB_PORT", "5432"))
     compose_test_url = (
-        "postgresql+asyncpg://kpinder:kpinder@localhost:5433/kpinder_test"
+        f"postgresql+asyncpg://kpinder:kpinder@{test_host}:{test_port}/kpinder_test"
     )
     try:
-        sock = socket.create_connection(("localhost", 5433), timeout=1)
+        sock = socket.create_connection((test_host, test_port), timeout=1)
         sock.close()
         yield compose_test_url
         return

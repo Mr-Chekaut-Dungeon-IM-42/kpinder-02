@@ -19,9 +19,9 @@ def jaccard(a: set[str], b: set[str]) -> float:
 async def to_candidate(
     user: User, storage: PhotoStorage | None = None
 ) -> CandidateResponse:
-    storage = storage or get_photo_storage()
     photo_url = None
     if user.photo_key is not None:
+        storage = storage or get_photo_storage()
         photo_url = await resolve_photo_url(storage, user.photo_key)
     return CandidateResponse(
         id=user.id,

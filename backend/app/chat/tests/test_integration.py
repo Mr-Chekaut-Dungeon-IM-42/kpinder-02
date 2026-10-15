@@ -33,17 +33,20 @@ def postgres_url() -> str:
         yield test_db_env
         return
 
-    # Check if local docker-compose Postgres on port 5433 is available
+    test_host = os.getenv("TEST_DB_HOST", os.getenv("DB_HOST", "localhost"))
+    test_port = int(os.getenv("TEST_DB_PORT", "5432"))
     compose_test_url = (
-        "postgresql+asyncpg://kpinder:kpinder@localhost:5433/kpinder_test"
+        f"postgresql+asyncpg://kpinder:kpinder@{test_host}:{test_port}/kpinder_test"
     )
     try:
-        sock = socket.create_connection(("localhost", 5433), timeout=1)
+        sock = socket.create_connection((test_host, test_port), timeout=1)
         sock.close()
 
         # Ensure kpinder_test database exists without touching the dev database
         async def _ensure_test_db() -> None:
-            admin_url = "postgresql+asyncpg://kpinder:kpinder@localhost:5433/kpinder"
+            admin_url = (
+                f"postgresql+asyncpg://kpinder:kpinder@{test_host}:{test_port}/kpinder"
+            )
             admin_engine = create_async_engine(admin_url, isolation_level="AUTOCOMMIT")
             async with admin_engine.connect() as conn:
                 res = await conn.execute(

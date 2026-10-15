@@ -72,13 +72,15 @@ class GetMatchesQuery:
         users = await repository.get_users_by_ids(self.db, other_ids)
 
         items = []
-        storage = self.storage or get_photo_storage()
+        storage = self.storage
         for m in matches:
             other = users.get(m.user_b_id if m.user_a_id == caller_id else m.user_a_id)
             if other is None:
                 continue
             photo_url = None
             if other.photo_key is not None:
+                if storage is None:
+                    storage = get_photo_storage()
                 photo_url = await resolve_photo_url(storage, other.photo_key)
             items.append(
                 MatchResponse(
