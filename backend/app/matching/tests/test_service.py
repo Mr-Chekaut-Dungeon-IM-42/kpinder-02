@@ -7,9 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.matching import service
-from app.matching.models import Match, Swipe
 from app.matching.schemas import SwipeRequest
-from app.shared.models import Interest, User, UserInterest
+from app.shared.models import Interest, Match, Swipe, User, UserInterest
 
 
 def test_jaccard_both_empty_scores_zero():

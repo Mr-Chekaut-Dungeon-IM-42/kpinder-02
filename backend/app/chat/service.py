@@ -14,7 +14,7 @@ from app.chat.schemas import (
     MessageSendRequest,
     MessagesPage,
 )
-from app.matching.models import Match
+from app.shared.models import Match
 from app.shared.ws import ws_manager
 
 

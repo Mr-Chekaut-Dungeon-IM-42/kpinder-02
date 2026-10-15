@@ -7,9 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.chat import service
-from app.chat.models import Message
 from app.chat.schemas import MessageEditRequest, MessageSendRequest
-from app.matching.models import Match
+from app.shared.models import Match, Message
 
 
 def _make_match(

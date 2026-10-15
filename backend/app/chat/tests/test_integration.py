@@ -18,11 +18,9 @@ from sqlalchemy.ext.asyncio import (
 from starlette.websockets import WebSocketDisconnect
 from testcontainers.postgres import PostgresContainer
 
-from app.chat.models import Message
 from app.main import app
-from app.matching.models import Match
 from app.shared.db import get_db
-from app.shared.models import Base, User
+from app.shared.models import Base, Match, Message, User
 from app.shared.security import create_access_token
 
 pytestmark = pytest.mark.integration

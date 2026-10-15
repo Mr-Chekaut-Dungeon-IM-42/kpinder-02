@@ -11,8 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
 from app.matching import repository
-from app.matching.models import Match
-from app.shared.models import Base, User
+from app.shared.models import Base, Match, User
 
 pytestmark = pytest.mark.integration
 
