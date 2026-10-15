@@ -6,7 +6,20 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-from app.chat import service
+from app.chat.commands import (
+    DeleteMessageCommand,
+    EditMessageCommand,
+    SendMessageCommand,
+)
+from app.chat.common import (
+    assert_participant,
+    decode_cursor,
+    encode_cursor,
+)
+from app.chat.queries import (
+    GetMessagesQuery,
+    SearchMessagesQuery,
+)
 from app.chat.schemas import MessageEditRequest, MessageSendRequest
 from app.shared.models import Match, Message
 
@@ -47,8 +60,8 @@ def _make_message(
 def test_cursor_roundtrip():
     now = datetime.now(UTC)
     msg_id = uuid.uuid4()
-    cursor = service._encode_cursor(now, msg_id)
-    decoded_dt, decoded_id = service._decode_cursor(cursor)
+    cursor = encode_cursor(now, msg_id)
+    decoded_dt, decoded_id = decode_cursor(cursor)
     assert decoded_dt == now
     assert decoded_id == msg_id
 
@@ -64,7 +77,7 @@ def test_cursor_roundtrip():
 )
 def test_decode_cursor_invalid_raises_422(invalid_cursor: str):
     with pytest.raises(HTTPException) as exc_info:
-        service._decode_cursor(invalid_cursor)
+        decode_cursor(invalid_cursor)
     assert exc_info.value.status_code == 422
 
 
@@ -75,17 +88,17 @@ def test_assert_participant():
     match = _make_match(user_a_id=user_a, user_b_id=user_b)
 
     # Caller is user_a -> returns recipient user_b
-    assert service._assert_participant(match, user_a) == user_b
+    assert assert_participant(match, user_a) == user_b
     # Caller is user_b -> returns recipient user_a
-    assert service._assert_participant(match, user_b) == user_a
+    assert assert_participant(match, user_b) == user_a
 
     # Caller is outsider -> 403 Forbidden
     with pytest.raises(HTTPException) as exc_info:
-        service._assert_participant(match, outsider)
+        assert_participant(match, outsider)
     assert exc_info.value.status_code == 403
 
 
-# --- send_message Tests ---
+# --- SendMessageCommand Tests ---
 
 
 @pytest.mark.asyncio
@@ -103,13 +116,14 @@ async def test_send_message_happy_path():
     )
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
-        patch("app.chat.service.repository.create_message", return_value=created_msg),
+        patch("app.chat.commands.repository.get_match", return_value=match),
+        patch("app.chat.commands.repository.create_message", return_value=created_msg),
         patch(
-            "app.chat.service.ws_manager.send_event", new_callable=AsyncMock
+            "app.chat.commands.ws_manager.send_event", new_callable=AsyncMock
         ) as mock_ws,
     ):
-        result = await service.send_message(db, user_a, match.id, data)
+        cmd = SendMessageCommand(db=db)
+        result = await cmd.execute(user_a, match.id, data)
 
     assert result.content == "Hi there!"
     assert result.sender_id == user_a
@@ -125,10 +139,11 @@ async def test_send_message_match_not_found():
     data = MessageSendRequest(client_message_id=uuid.uuid4(), content="Hi")
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=None),
+        patch("app.chat.commands.repository.get_match", return_value=None),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.send_message(db, uuid.uuid4(), uuid.uuid4(), data)
+        cmd = SendMessageCommand(db=db)
+        await cmd.execute(uuid.uuid4(), uuid.uuid4(), data)
 
     assert exc_info.value.status_code == 404
 
@@ -141,10 +156,11 @@ async def test_send_message_caller_not_participant():
     data = MessageSendRequest(client_message_id=uuid.uuid4(), content="Hi")
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.commands.repository.get_match", return_value=match),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.send_message(db, outsider, match.id, data)
+        cmd = SendMessageCommand(db=db)
+        await cmd.execute(outsider, match.id, data)
 
     assert exc_info.value.status_code == 403
 
@@ -164,20 +180,21 @@ async def test_send_message_idempotent_retry_on_duplicate_client_id():
     )
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.commands.repository.get_match", return_value=match),
         patch(
-            "app.chat.service.repository.create_message",
+            "app.chat.commands.repository.create_message",
             side_effect=IntegrityError("stmt", {}, Exception("unique violation")),
         ),
         patch(
-            "app.chat.service.repository.get_message_by_client_id",
+            "app.chat.commands.repository.get_message_by_client_id",
             return_value=existing_msg,
         ),
         patch(
-            "app.chat.service.ws_manager.send_event", new_callable=AsyncMock
+            "app.chat.commands.ws_manager.send_event", new_callable=AsyncMock
         ) as mock_ws,
     ):
-        result = await service.send_message(db, user_a, match.id, data)
+        cmd = SendMessageCommand(db=db)
+        result = await cmd.execute(user_a, match.id, data)
 
     assert result.id == existing_msg.id
     db.rollback.assert_awaited_once()
@@ -192,22 +209,23 @@ async def test_send_message_integrity_error_without_existing_message_reraises():
     data = MessageSendRequest(client_message_id=uuid.uuid4(), content="Fail")
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.commands.repository.get_match", return_value=match),
         patch(
-            "app.chat.service.repository.create_message",
+            "app.chat.commands.repository.create_message",
             side_effect=IntegrityError("stmt", {}, Exception("other DB error")),
         ),
         patch(
-            "app.chat.service.repository.get_message_by_client_id", return_value=None
+            "app.chat.commands.repository.get_message_by_client_id", return_value=None
         ),
         pytest.raises(IntegrityError),
     ):
-        await service.send_message(db, user_a, match.id, data)
+        cmd = SendMessageCommand(db=db)
+        await cmd.execute(user_a, match.id, data)
 
     db.rollback.assert_awaited_once()
 
 
-# --- get_messages Tests ---
+# --- GetMessagesQuery Tests ---
 
 
 @pytest.mark.asyncio
@@ -218,12 +236,13 @@ async def test_get_messages_happy_path_fewer_than_limit():
     messages = [_make_message(match.id, user_a, f"Msg {i}") for i in range(5)]
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.queries.repository.get_match", return_value=match),
         patch(
-            "app.chat.service.repository.get_messages_page", return_value=messages
+            "app.chat.queries.repository.get_messages_page", return_value=messages
         ) as mock_get_page,
     ):
-        page = await service.get_messages(db, user_a, match.id, cursor=None)
+        query = GetMessagesQuery(db=db)
+        page = await query.execute(user_a, match.id, cursor=None)
 
     assert len(page.items) == 5
     assert page.next_cursor is None
@@ -248,14 +267,15 @@ async def test_get_messages_generates_next_cursor_when_limit_reached():
     ]
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
-        patch("app.chat.service.repository.get_messages_page", return_value=messages),
+        patch("app.chat.queries.repository.get_match", return_value=match),
+        patch("app.chat.queries.repository.get_messages_page", return_value=messages),
     ):
-        page = await service.get_messages(db, user_a, match.id, cursor=None)
+        query = GetMessagesQuery(db=db)
+        page = await query.execute(user_a, match.id, cursor=None)
 
     assert len(page.items) == 20
     assert page.next_cursor is not None
-    dt, msg_id = service._decode_cursor(page.next_cursor)
+    dt, msg_id = decode_cursor(page.next_cursor)
     assert msg_id == messages[-1].id
     assert dt == messages[-1].created_at
 
@@ -267,15 +287,16 @@ async def test_get_messages_with_valid_cursor_passes_to_repository():
     match = _make_match(user_a_id=user_a, user_b_id=user_b)
     last_dt = datetime.now(UTC)
     last_id = uuid.uuid4()
-    cursor = service._encode_cursor(last_dt, last_id)
+    cursor = encode_cursor(last_dt, last_id)
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.queries.repository.get_match", return_value=match),
         patch(
-            "app.chat.service.repository.get_messages_page", return_value=[]
+            "app.chat.queries.repository.get_messages_page", return_value=[]
         ) as mock_get_page,
     ):
-        page = await service.get_messages(db, user_a, match.id, cursor=cursor, limit=20)
+        query = GetMessagesQuery(db=db)
+        page = await query.execute(user_a, match.id, cursor=cursor, limit=20)
 
     assert len(page.items) == 0
     mock_get_page.assert_awaited_once_with(db, match.id, last_dt, last_id, 20)
@@ -285,14 +306,15 @@ async def test_get_messages_with_valid_cursor_passes_to_repository():
 async def test_get_messages_match_not_found():
     db = AsyncMock()
     with (
-        patch("app.chat.service.repository.get_match", return_value=None),
+        patch("app.chat.queries.repository.get_match", return_value=None),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.get_messages(db, uuid.uuid4(), uuid.uuid4(), cursor=None)
+        query = GetMessagesQuery(db=db)
+        await query.execute(uuid.uuid4(), uuid.uuid4(), cursor=None)
     assert exc_info.value.status_code == 404
 
 
-# --- edit_message Tests ---
+# --- EditMessageCommand Tests ---
 
 
 @pytest.mark.asyncio
@@ -309,14 +331,15 @@ async def test_edit_message_happy_path():
         return msg
 
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=message),
-        patch("app.chat.service.repository.get_match", return_value=match),
-        patch("app.chat.service.repository.update_message", side_effect=_apply_update),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=message),
+        patch("app.chat.commands.repository.get_match", return_value=match),
+        patch("app.chat.commands.repository.update_message", side_effect=_apply_update),
         patch(
-            "app.chat.service.ws_manager.send_event", new_callable=AsyncMock
+            "app.chat.commands.ws_manager.send_event", new_callable=AsyncMock
         ) as mock_ws,
     ):
-        result = await service.edit_message(db, user_a, message.id, data)
+        cmd = EditMessageCommand(db=db)
+        result = await cmd.execute(user_a, message.id, data)
 
     assert result.content == "Updated content"
     db.commit.assert_awaited_once()
@@ -330,10 +353,11 @@ async def test_edit_message_not_found():
     db = AsyncMock()
     data = MessageEditRequest(content="Updated")
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=None),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=None),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.edit_message(db, uuid.uuid4(), uuid.uuid4(), data)
+        cmd = EditMessageCommand(db=db)
+        await cmd.execute(uuid.uuid4(), uuid.uuid4(), data)
     assert exc_info.value.status_code == 404
 
 
@@ -345,10 +369,11 @@ async def test_edit_message_forbidden_for_non_sender():
     data = MessageEditRequest(content="Hacked")
 
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=message),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=message),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.edit_message(db, user_b, message.id, data)
+        cmd = EditMessageCommand(db=db)
+        await cmd.execute(user_b, message.id, data)
 
     assert exc_info.value.status_code == 403
 
@@ -365,20 +390,21 @@ async def test_edit_message_when_match_is_none():
         return msg
 
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=message),
-        patch("app.chat.service.repository.get_match", return_value=None),
-        patch("app.chat.service.repository.update_message", side_effect=_apply_update),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=message),
+        patch("app.chat.commands.repository.get_match", return_value=None),
+        patch("app.chat.commands.repository.update_message", side_effect=_apply_update),
         patch(
-            "app.chat.service.ws_manager.send_event", new_callable=AsyncMock
+            "app.chat.commands.ws_manager.send_event", new_callable=AsyncMock
         ) as mock_ws,
     ):
-        result = await service.edit_message(db, user_a, message.id, data)
+        cmd = EditMessageCommand(db=db)
+        result = await cmd.execute(user_a, message.id, data)
 
     assert result.content == "New"
     mock_ws.assert_not_called()
 
 
-# --- delete_message Tests ---
+# --- DeleteMessageCommand Tests ---
 
 
 @pytest.mark.asyncio
@@ -391,14 +417,15 @@ async def test_delete_message_happy_path():
     )
 
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=message),
-        patch("app.chat.service.repository.get_match", return_value=match),
-        patch("app.chat.service.repository.delete_message") as mock_delete,
+        patch("app.chat.commands.repository.get_message_by_id", return_value=message),
+        patch("app.chat.commands.repository.get_match", return_value=match),
+        patch("app.chat.commands.repository.delete_message") as mock_delete,
         patch(
-            "app.chat.service.ws_manager.send_event", new_callable=AsyncMock
+            "app.chat.commands.ws_manager.send_event", new_callable=AsyncMock
         ) as mock_ws,
     ):
-        await service.delete_message(db, user_a, message.id)
+        cmd = DeleteMessageCommand(db=db)
+        await cmd.execute(user_a, message.id)
 
     mock_delete.assert_awaited_once_with(db, message)
     db.commit.assert_awaited_once()
@@ -413,10 +440,11 @@ async def test_delete_message_happy_path():
 async def test_delete_message_not_found():
     db = AsyncMock()
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=None),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=None),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.delete_message(db, uuid.uuid4(), uuid.uuid4())
+        cmd = DeleteMessageCommand(db=db)
+        await cmd.execute(uuid.uuid4(), uuid.uuid4())
     assert exc_info.value.status_code == 404
 
 
@@ -427,10 +455,11 @@ async def test_delete_message_forbidden_for_non_sender():
     message = _make_message(match_id=uuid.uuid4(), sender_id=user_a)
 
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=message),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=message),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.delete_message(db, user_b, message.id)
+        cmd = DeleteMessageCommand(db=db)
+        await cmd.execute(user_b, message.id)
 
     assert exc_info.value.status_code == 403
 
@@ -442,20 +471,21 @@ async def test_delete_message_when_match_is_none():
     message = _make_message(match_id=uuid.uuid4(), sender_id=user_a)
 
     with (
-        patch("app.chat.service.repository.get_message_by_id", return_value=message),
-        patch("app.chat.service.repository.get_match", return_value=None),
-        patch("app.chat.service.repository.delete_message"),
+        patch("app.chat.commands.repository.get_message_by_id", return_value=message),
+        patch("app.chat.commands.repository.get_match", return_value=None),
+        patch("app.chat.commands.repository.delete_message"),
         patch(
-            "app.chat.service.ws_manager.send_event", new_callable=AsyncMock
+            "app.chat.commands.ws_manager.send_event", new_callable=AsyncMock
         ) as mock_ws,
     ):
-        await service.delete_message(db, user_a, message.id)
+        cmd = DeleteMessageCommand(db=db)
+        await cmd.execute(user_a, message.id)
 
     db.commit.assert_awaited_once()
     mock_ws.assert_not_called()
 
 
-# --- search_messages Tests ---
+# --- SearchMessagesQuery Tests ---
 
 
 @pytest.mark.asyncio
@@ -465,10 +495,11 @@ async def test_search_messages_empty_or_whitespace_returns_empty_list():
     match = _make_match(user_a_id=user_a, user_b_id=user_b)
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
-        patch("app.chat.service.repository.search_messages") as mock_search,
+        patch("app.chat.queries.repository.get_match", return_value=match),
+        patch("app.chat.queries.repository.search_messages") as mock_search,
     ):
-        result = await service.search_messages(db, user_a, match.id, "   ")
+        query = SearchMessagesQuery(db=db)
+        result = await query.execute(user_a, match.id, "   ")
 
     assert result == []
     mock_search.assert_not_called()
@@ -482,13 +513,14 @@ async def test_search_messages_happy_path():
     found_msg = _make_message(match.id, user_b, "Found keyword in message")
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.queries.repository.get_match", return_value=match),
         patch(
-            "app.chat.service.repository.search_messages",
+            "app.chat.queries.repository.search_messages",
             return_value=[found_msg],
         ) as mock_search,
     ):
-        results = await service.search_messages(db, user_a, match.id, " keyword ")
+        query = SearchMessagesQuery(db=db)
+        results = await query.execute(user_a, match.id, " keyword ")
 
     assert len(results) == 1
     assert results[0].id == found_msg.id
@@ -499,10 +531,11 @@ async def test_search_messages_happy_path():
 async def test_search_messages_match_not_found():
     db = AsyncMock()
     with (
-        patch("app.chat.service.repository.get_match", return_value=None),
+        patch("app.chat.queries.repository.get_match", return_value=None),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.search_messages(db, uuid.uuid4(), uuid.uuid4(), "query")
+        query = SearchMessagesQuery(db=db)
+        await query.execute(uuid.uuid4(), uuid.uuid4(), "query")
     assert exc_info.value.status_code == 404
 
 
@@ -513,8 +546,9 @@ async def test_search_messages_caller_not_participant():
     outsider = uuid.uuid4()
 
     with (
-        patch("app.chat.service.repository.get_match", return_value=match),
+        patch("app.chat.queries.repository.get_match", return_value=match),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.search_messages(db, outsider, match.id, "query")
+        query = SearchMessagesQuery(db=db)
+        await query.execute(outsider, match.id, "query")
     assert exc_info.value.status_code == 403

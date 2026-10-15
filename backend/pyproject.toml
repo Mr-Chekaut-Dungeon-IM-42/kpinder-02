@@ -57,15 +57,18 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query"]
 
 [tool.mutmut]
 source_paths = [
-    "app/chat/service.py",
-    "app/auth/service.py",
-    "app/matching/service.py",
+    "app/chat/commands.py",
+    "app/chat/queries.py",
+    "app/matching/commands.py",
+    "app/matching/queries.py",
+    "app/auth/commands.py",
+    "app/auth/queries.py",
 ]
 pytest_add_cli_args_test_selection = [
-    "app/chat/tests/test_service.py",
+    "app/chat/tests/test_cqrs.py",
+    "app/matching/tests/test_cqrs.py",
     "app/auth/tests/test_service.py",
     "app/auth/tests/test_profile_service.py",
     "app/auth/tests/test_photo_upload.py",
-    "app/matching/tests/test_service.py",
 ]
 also_copy = ["app"]

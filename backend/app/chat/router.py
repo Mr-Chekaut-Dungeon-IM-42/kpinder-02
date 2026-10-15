@@ -9,16 +9,27 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.chat import service
+from app.chat.commands import (
+    DeleteMessageCommand,
+    EditMessageCommand,
+    SendMessageCommand,
+    get_delete_message_command,
+    get_edit_message_command,
+    get_send_message_command,
+)
+from app.chat.queries import (
+    GetMessagesQuery,
+    SearchMessagesQuery,
+    get_messages_query,
+    get_search_messages_query,
+)
 from app.chat.schemas import (
     MessageEditRequest,
     MessageResponse,
     MessageSendRequest,
     MessagesPage,
 )
-from app.shared.db import get_db
 from app.shared.jwt_dep import get_current_user_id, get_current_user_id_ws
 from app.shared.ws import ws_manager
 
@@ -33,10 +44,10 @@ router = APIRouter(tags=["chat"])
 async def send_message(
     match_id: uuid.UUID,
     data: MessageSendRequest,
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    command: SendMessageCommand = Depends(get_send_message_command),
 ) -> MessageResponse:
-    return await service.send_message(db, user_id, match_id, data)
+    return await command.execute(user_id, match_id, data)
 
 
 @router.get(
@@ -46,10 +57,10 @@ async def send_message(
 async def get_messages(
     match_id: uuid.UUID,
     cursor: str | None = Query(default=None),
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    query: GetMessagesQuery = Depends(get_messages_query),
 ) -> MessagesPage:
-    return await service.get_messages(db, user_id, match_id, cursor)
+    return await query.execute(user_id, match_id, cursor)
 
 
 @router.patch(
@@ -59,10 +70,10 @@ async def get_messages(
 async def edit_message(
     message_id: uuid.UUID,
     data: MessageEditRequest,
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    command: EditMessageCommand = Depends(get_edit_message_command),
 ) -> MessageResponse:
-    return await service.edit_message(db, user_id, message_id, data)
+    return await command.execute(user_id, message_id, data)
 
 
 @router.delete(
@@ -71,10 +82,10 @@ async def edit_message(
 )
 async def delete_message(
     message_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    command: DeleteMessageCommand = Depends(get_delete_message_command),
 ) -> None:
-    await service.delete_message(db, user_id, message_id)
+    await command.execute(user_id, message_id)
 
 
 @router.get(
@@ -84,10 +95,10 @@ async def delete_message(
 async def search_messages(
     match_id: uuid.UUID,
     q: str = Query(default=""),
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    query: SearchMessagesQuery = Depends(get_search_messages_query),
 ) -> list[MessageResponse]:
-    return await service.search_messages(db, user_id, match_id, q)
+    return await query.execute(user_id, match_id, q)
 
 
 @router.websocket("/ws")

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from app.auth import service
+from app.auth.commands import SignupCommand
 from app.auth.schemas import SignupRequest
 from app.shared.models import Base
 
@@ -66,7 +66,7 @@ async def test_concurrent_signup_same_email_only_one_succeeds(session_factory):
     async def attempt():
         async with session_factory() as db:
             try:
-                await service.signup(db, data)
+                await SignupCommand(db=db).execute(data)
                 return "ok"
             except Exception as exc:  # noqa: BLE001
                 status_code = getattr(exc, "status_code", None)

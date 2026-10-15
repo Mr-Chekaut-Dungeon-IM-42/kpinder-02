@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-from app.auth import service
+from app.auth.commands import LoginCommand, SignupCommand
 from app.auth.schemas import LoginRequest, SignupRequest
 from app.shared.models import User
 from app.shared.security import decode_access_token, hash_password
@@ -15,9 +15,10 @@ from app.shared.security import decode_access_token, hash_password
 async def test_signup_success():
     db = AsyncMock()
     created = User(id=uuid.uuid4(), email="a@b.com", password_hash="x", name="Alice")
-    with patch("app.auth.service.repository.create_user", return_value=created):
-        user = await service.signup(
-            db, SignupRequest(email="a@b.com", password="password123", name="Alice")
+    with patch("app.auth.commands.repository.create_user", return_value=created):
+        cmd = SignupCommand(db=db)
+        user = await cmd.execute(
+            SignupRequest(email="a@b.com", password="password123", name="Alice")
         )
     assert user.email == "a@b.com"
     db.commit.assert_awaited_once()
@@ -28,13 +29,14 @@ async def test_signup_duplicate_email_raises_409():
     db = AsyncMock()
     with (
         patch(
-            "app.auth.service.repository.create_user",
+            "app.auth.commands.repository.create_user",
             side_effect=IntegrityError("stmt", {}, Exception("dup")),
         ),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.signup(
-            db, SignupRequest(email="a@b.com", password="password123", name="Alice")
+        cmd = SignupCommand(db=db)
+        await cmd.execute(
+            SignupRequest(email="a@b.com", password="password123", name="Alice")
         )
     assert exc_info.value.status_code == 409
     db.rollback.assert_awaited_once()
@@ -49,17 +51,11 @@ async def test_login_success():
         password_hash=hash_password("password123"),
         name="Alice",
     )
-    with patch("app.auth.service.repository.get_user_by_email", return_value=user):
-        token = await service.login(
-            db, LoginRequest(email="a@b.com", password="password123")
-        )
+    with patch("app.auth.commands.repository.get_user_by_email", return_value=user):
+        cmd = LoginCommand(db=db)
+        token = await cmd.execute(LoginRequest(email="a@b.com", password="password123"))
     assert token.token_type == "bearer"
     assert token.access_token
-    # The token's subject must be *this* user's id — a prior version of this
-    # test only checked that some token came back, so a mutant that passed
-    # `subject=None` (or `str(None)`) to create_access_token survived
-    # undetected: the minted token would be well-formed but useless (every
-    # subsequent authenticated request would 401 on an unparseable subject).
     assert decode_access_token(token.access_token) == str(user.id)
 
 
@@ -73,10 +69,11 @@ async def test_login_wrong_password_raises_401():
         name="Alice",
     )
     with (
-        patch("app.auth.service.repository.get_user_by_email", return_value=user),
+        patch("app.auth.commands.repository.get_user_by_email", return_value=user),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.login(db, LoginRequest(email="a@b.com", password="wrong"))
+        cmd = LoginCommand(db=db)
+        await cmd.execute(LoginRequest(email="a@b.com", password="wrong"))
     assert exc_info.value.status_code == 401
 
 
@@ -84,10 +81,9 @@ async def test_login_wrong_password_raises_401():
 async def test_login_unknown_email_raises_401():
     db = AsyncMock()
     with (
-        patch("app.auth.service.repository.get_user_by_email", return_value=None),
+        patch("app.auth.commands.repository.get_user_by_email", return_value=None),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.login(
-            db, LoginRequest(email="nobody@b.com", password="password123")
-        )
+        cmd = LoginCommand(db=db)
+        await cmd.execute(LoginRequest(email="nobody@b.com", password="password123"))
     assert exc_info.value.status_code == 401
