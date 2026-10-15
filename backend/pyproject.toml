@@ -6,9 +6,17 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
-    "pydantic>=2.8.0",
+    "pydantic[email]>=2.8.0",
     "pydantic-settings>=2.4.0",
     "uvicorn[standard]>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "geoalchemy2>=0.15.0",
+    "argon2-cffi>=23.1.0",
+    "pyjwt>=2.9.0",
+    "boto3>=1.35.0",
+    "python-multipart>=0.0.12",
 ]
 
 [dependency-groups]
@@ -17,6 +25,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "ruff>=0.9.0",
+    "testcontainers[postgres]>=4.8.0",
 ]
 
 [build-system]
@@ -27,8 +36,11 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "app"]
 pythonpath = ["."]
+asyncio_mode = "auto"
+markers = ["integration: requires Docker (testcontainers); excluded by default"]
+addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 88
@@ -36,3 +48,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query"]

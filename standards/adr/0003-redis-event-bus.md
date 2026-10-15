@@ -1,6 +1,6 @@
 # Redis pub/sub as the cross-slice event bus
 
-- Status: accepted (implementation currently scoped out — see `ai/audit.md` Part A #2–3)
+- Status: accepted (implementation currently scoped out — see `ai/audit/lab-2.md` Part A #2–3)
 - Date: 2026-10-02
 
 ## Context
@@ -17,4 +17,4 @@ A direct in-process callback/event-emitter (no Redis) was considered — it pres
 
 ## Consequences
 
-Introduces a real infrastructure dependency (Redis) and two things that must stay up for the app to behave correctly: the pub/sub channel and the cache. The MVP's initial implementation deliberately does not build this yet (see `ai/audit.md` Part A #2–3) — `matching`/`chat` currently push directly over the shared WS registry instead, and `matching` queries Postgres directly with no cache. This ADR stays "accepted" because the *decision* (event bus is the right mechanism once the project needs persisted/offline notifications or multi-instance scaling) is still correct; only the timing of building it changed.
+Introduces a real infrastructure dependency (Redis) and two things that must stay up for the app to behave correctly: the pub/sub channel and the cache. The MVP's initial implementation deliberately does not build this yet (see `ai/audit/lab-2.md` Part A #2–3) — `matching`/`chat` currently push directly over the shared WS registry instead, and `matching` queries Postgres directly with no cache. This ADR stays "accepted" because the *decision* (event bus is the right mechanism once the project needs persisted/offline notifications or multi-instance scaling) is still correct; only the timing of building it changed.
