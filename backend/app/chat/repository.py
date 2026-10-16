@@ -5,8 +5,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from app.chat.models import Message
-from app.matching.models import Match
+from app.shared.models import Match, Message
 
 
 async def get_match(db: AsyncSession, match_id: uuid.UUID) -> Match | None:

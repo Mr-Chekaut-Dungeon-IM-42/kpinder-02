@@ -6,8 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import func
 
-from app.auth.models import User
-from app.matching.models import Match, Swipe
+from app.shared.models import Match, Swipe, User
 
 
 async def get_user_with_interests(db: AsyncSession, user_id: uuid.UUID) -> User | None:

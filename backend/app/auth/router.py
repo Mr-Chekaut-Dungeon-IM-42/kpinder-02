@@ -1,10 +1,23 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import service
-from app.auth.models import User
+from app.auth.commands import (
+    LoginCommand,
+    SignupCommand,
+    UpdateProfileCommand,
+    UploadPhotoCommand,
+    get_login_command,
+    get_signup_command,
+    get_update_profile_command,
+    get_upload_photo_command,
+)
+from app.auth.queries import (
+    GetProfileQuery,
+    ListInterestsQuery,
+    get_list_interests_query,
+    get_profile_query,
+)
 from app.auth.schemas import (
     InterestResponse,
     LoginRequest,
@@ -15,8 +28,8 @@ from app.auth.schemas import (
     TokenResponse,
     UserResponse,
 )
-from app.shared.db import get_db
 from app.shared.jwt_dep import get_current_user_id
+from app.shared.models import User
 from app.shared.storage import PhotoStorage, get_photo_storage, resolve_photo_url
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -47,51 +60,55 @@ async def _to_profile_response(user: User) -> ProfileResponse:
     "/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 async def signup(
-    data: SignupRequest, db: AsyncSession = Depends(get_db)
+    data: SignupRequest,
+    command: SignupCommand = Depends(get_signup_command),
 ) -> UserResponse:
-    user = await service.signup(db, data)
+    user = await command.execute(data)
     return UserResponse.model_validate(user)
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    data: LoginRequest, db: AsyncSession = Depends(get_db)
+    data: LoginRequest,
+    command: LoginCommand = Depends(get_login_command),
 ) -> TokenResponse:
-    return await service.login(db, data)
+    return await command.execute(data)
 
 
 @router.get("/interests", response_model=list[InterestResponse])
-async def interests(db: AsyncSession = Depends(get_db)) -> list[InterestResponse]:
-    rows = await service.list_interests(db)
+async def interests(
+    query: ListInterestsQuery = Depends(get_list_interests_query),
+) -> list[InterestResponse]:
+    rows = await query.execute()
     return [InterestResponse.model_validate(row) for row in rows]
 
 
 @router.get("/me", response_model=ProfileResponse)
 async def me(
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    query: GetProfileQuery = Depends(get_profile_query),
 ) -> ProfileResponse:
-    user = await service.get_profile(db, user_id)
+    user = await query.execute(user_id)
     return await _to_profile_response(user)
 
 
 @router.patch("/update_profile", response_model=ProfileResponse)
 async def update_profile(
     data: ProfileUpdateRequest,
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    command: UpdateProfileCommand = Depends(get_update_profile_command),
 ) -> ProfileResponse:
-    user = await service.update_profile(db, user_id, data)
+    user = await command.execute(user_id, data)
     return await _to_profile_response(user)
 
 
 @router.post("/upload_photo", response_model=PhotoResponse)
 async def upload_photo(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    command: UploadPhotoCommand = Depends(get_upload_photo_command),
     storage: PhotoStorage = Depends(get_photo_storage),
 ) -> PhotoResponse:
-    user = await service.upload_photo(db, user_id, file, storage)
+    user = await command.execute(user_id, file)
     photo_url = await storage.get_url(user.photo_key)
     return PhotoResponse(photo_url=photo_url)

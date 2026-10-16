@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.auth import service
-from app.auth.models import User
+from app.auth.commands import UploadPhotoCommand
+from app.shared.models import User
 
 JPEG_BYTES = b"\xff\xd8\xff" + b"rest-of-jpeg"
 
@@ -31,8 +31,9 @@ async def test_upload_photo_success():
     storage = AsyncMock()
     storage.upload.return_value = "abc123.jpg"
 
-    with patch("app.auth.service.repository.get_user_by_id", return_value=user):
-        result = await service.upload_photo(db, user.id, file, storage)
+    with patch("app.auth.commands.repository.get_user_by_id", return_value=user):
+        cmd = UploadPhotoCommand(db=db, storage=storage)
+        result = await cmd.execute(user.id, file)
 
     assert result.photo_key == "abc123.jpg"
     storage.upload.assert_awaited_once_with(JPEG_BYTES, "image/jpeg")
@@ -47,10 +48,11 @@ async def test_upload_photo_wrong_content_type_raises_415():
     storage = AsyncMock()
 
     with (
-        patch("app.auth.service.repository.get_user_by_id", return_value=user),
+        patch("app.auth.commands.repository.get_user_by_id", return_value=user),
         pytest.raises(HTTPException) as exc_info,
     ):
-        await service.upload_photo(db, user.id, file, storage)
+        cmd = UploadPhotoCommand(db=db, storage=storage)
+        await cmd.execute(user.id, file)
 
     assert exc_info.value.status_code == 415
     storage.upload.assert_not_awaited()

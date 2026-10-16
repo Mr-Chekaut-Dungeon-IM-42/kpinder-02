@@ -5,11 +5,17 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import app.chat.models  # noqa: F401 — registers Message on Base.metadata
-import app.matching.models  # noqa: F401 — registers Swipe/Match on Base.metadata
 from alembic import context
-from app.auth.models import Base
 from app.shared.config import settings
+from app.shared.models import (  # noqa: F401 - registers all tables on Base.metadata
+    Base,
+    Interest,
+    Match,
+    Message,
+    Swipe,
+    User,
+    UserInterest,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
