@@ -14,8 +14,9 @@ test-integration:
 	cd backend && uv run pytest -q -m integration
 
 mutation:
+	set -a; [ -f .env ] && . ./.env; set +a; \
 	cd backend && \
-	DATABASE_URL=$${DATABASE_URL:-postgresql+asyncpg://kpinder:kpinder@localhost:5432/kpinder} \
+	DATABASE_URL=$${DATABASE_URL:-postgresql+asyncpg://kpinder:kpinder@$${DB_HOST:-localhost}:$${DB_PORT:-5432}/kpinder} \
 	JWT_SECRET=$${JWT_SECRET:-mutmut-dummy-secret} \
 	uv run --with mutmut mutmut run
 
