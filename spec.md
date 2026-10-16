@@ -149,8 +149,9 @@ A Postgres connection drop or query failure (not a business-logic error like a d
 ## 5. Infra & environments
 
 - **Local**: `docker compose up` — Postgres+PostGIS, backend, frontend.
-- **CI**: GitHub Actions — `ruff`/`eslint`+`prettier`, backend unit tests, integration tests (real Postgres+PostGIS via testcontainers), frontend build. All required checks on every PR into `main`.
-- **Staging**: Railway, auto-deploys on every merge to `main`.
+- **CI** (GitHub Actions, ADR-0025): `ruff`/`eslint`+`prettier`, build (backend `uv build`, frontend `vite build`), backend unit tests, integration tests (real Postgres+PostGIS via a service container), and a PR-title Conventional Commits check (ADR-0024) — all **required** on every PR into `main`. E2E tests also run but are advisory, not blocking.
+- **Merge policy**: branch protection on `main` requires the checks above to pass, requires the PR branch to be up to date with `main`, and disallows direct pushes — PRs only. One human approval is required per the Definition of Done (`standards/DEFINITION_OF_DONE.md`); self-merge is not allowed.
+- **Staging**: backend on Railway (Docker build + a `postgis/postgis` service for the DB), frontend on Vercel (ADR-0022) — both auto-deploy independently on every merge to `main` via their native GitHub integrations, with no deploy step in the Actions workflow (ADR-0023). `/version` on the backend reports the deployed commit's SHA, read from the platform-provided `RAILWAY_GIT_COMMIT_SHA` env var.
 - **Config**: `pydantic-settings` reads env vars uniformly across local/stage/prod; secrets (DB URL, JWT signing key, Cloudflare R2 account ID/access key/bucket — ADR-0010) are never committed — `.env.example` only.
 
 ## 6. Testing strategy
@@ -172,7 +173,7 @@ All four tiers are now implemented against `auth`, `matching`, and `chat`: unit 
 
 ## 7. Standards
 
-See `standards/` for ADR format (MADR), Definition of Done, and the audit checklist. ADRs are written only for genuinely contested decisions (vertical slices vs layered, shared-core boundary rule, Redis as event bus, WebSockets vs polling, PostGIS vs plain lat/lng, swipe+mutual-match vs auto-match, JWT vs sessions) — not for routine stack picks.
+See `standards/` for ADR format (MADR), Definition of Done, and the audit checklist. ADRs are written only for genuinely contested decisions (vertical slices vs layered, shared-core boundary rule, Redis as event bus, WebSockets vs polling, PostGIS vs plain lat/lng, swipe+mutual-match vs auto-match, JWT vs sessions, Railway+Vercel as staging hosts, native-platform CD vs Actions-driven deploy, Conventional Commits on the PR title, GitHub Actions as CI runner) — not for routine stack picks.
 
 ## 8. AI trail
 
