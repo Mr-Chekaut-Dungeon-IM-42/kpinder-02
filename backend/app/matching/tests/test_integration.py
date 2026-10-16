@@ -1,61 +1,14 @@
 import asyncio
-import contextlib
-import os
-import socket
 import uuid
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from testcontainers.postgres import PostgresContainer
 
 from app.matching import repository
-from app.shared.models import Base, Match, User
+from app.shared.models import Match, User
 
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    test_db_env = os.getenv("TEST_DATABASE_URL")
-    if test_db_env:
-        yield test_db_env
-        return
-
-    test_host = os.getenv("TEST_DB_HOST", os.getenv("DB_HOST", "localhost"))
-    test_port = int(os.getenv("TEST_DB_PORT", "5432"))
-    compose_test_url = (
-        f"postgresql+asyncpg://kpinder:kpinder@{test_host}:{test_port}/kpinder_test"
-    )
-    try:
-        sock = socket.create_connection((test_host, test_port), timeout=1)
-        sock.close()
-        yield compose_test_url
-        return
-    except OSError:
-        pass
-
-    container = PostgresContainer("postgis/postgis:16-3.4")
-    try:
-        container.start()
-        yield container.get_connection_url().replace(
-            "postgresql+psycopg2", "postgresql+asyncpg"
-        )
-    finally:
-        with contextlib.suppress(Exception):
-            container.stop()
-
-
-@pytest.fixture
-async def session_factory(postgres_url: str):
-    engine = create_async_engine(postgres_url)
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-        await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    yield factory
-    await engine.dispose()
 
 
 @pytest.mark.asyncio
