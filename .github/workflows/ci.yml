@@ -98,29 +98,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
+      - name: Resolve APP_HOST (from .env.example, fallback 127.0.0.1)
+        run: |
+          app_host=$(grep -m1 '^APP_HOST=' .env.example | cut -d= -f2)
+          echo "APP_HOST=${app_host:-127.0.0.1}" >> "$GITHUB_ENV"
       - name: Start backend + db via docker compose
         run: |
-          # .env.example is the single source of truth for every value here —
-          # no override needed. ADR-0021's DB_HOST/APP_HOST loopback-alias
-          # dance (127.0.0.2/127.0.0.3) exists for macOS dev machines, where
-          # only 127.0.0.1 is bound by default; GitHub's ubuntu-latest
-          # runners are Linux, where the whole 127.0.0.0/8 range is already
-          # routed to loopback, so the compose defaults just work.
-          #
-          # IMPORTANT: don't set DB_HOST here to "fix" that — DATABASE_URL
-          # (line below in docker-compose.yml) reads the *same* DB_HOST var
-          # for the backend container's own DB connection string, where it
-          # must stay "db" (the Docker-network service name). Overriding
-          # DB_HOST for the host-side port bind breaks that connection
-          # instead (confirmed locally: alembic/signup failed with
-          # "Connect call failed 127.0.0.1:5432" from inside the container).
-          cp .env.example .env
+          # Only APP_HOST is passed through to compose, resolved above — not
+          # the whole .env.example, and not DB_HOST. Two reasons:
+          #  1. .env.example's DB_HOST=localhost isn't a valid literal IP for
+          #     the `db` service's host-port-bind syntax (ADR-0021); setting
+          #     it breaks `docker compose config` outright
+          #     ("invalid IP address: localhost"), confirmed locally.
+          #  2. docker-compose.yml's backend service now hardcodes its own
+          #     DATABASE_URL host as "db" (the Docker-network name) rather
+          #     than reading DB_HOST at all, so there's nothing for this job
+          #     to get right or wrong there either way.
+          # Leaving DB_HOST unset lets the `db` service fall back to its own
+          # default (127.0.0.2, a valid literal IP, routable with zero setup
+          # on Linux runners).
+          echo "APP_HOST=${APP_HOST}" > .env
           cp .env.example backend/.env
           docker compose up -d --build backend
       - name: Wait for backend health
         run: |
           for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.3:8000/health > /dev/null; then exit 0; fi
+            if curl -sf "http://${APP_HOST}:8000/health" > /dev/null; then exit 0; fi
             sleep 2
           done
           echo "backend never became healthy" >&2
@@ -136,7 +139,7 @@ jobs:
       - run: uv run pytest -q -m e2e
         working-directory: backend
         env:
-          E2E_BASE_URL: http://127.0.0.3:8000
+          E2E_BASE_URL: http://${{ env.APP_HOST }}:8000
       - if: always()
         run: docker compose down -v
 
