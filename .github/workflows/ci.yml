@@ -66,7 +66,12 @@ jobs:
         env:
           POSTGRES_USER: kpinder
           POSTGRES_PASSWORD: kpinder
-          POSTGRES_DB: kpinder_test
+          # kpinder (not kpinder_test): matches the local `db` service
+          # (docker-compose.yml), not `db-test` — conftest.py's
+          # ensure_test_database() connects here as admin and creates
+          # kpinder_test itself if it doesn't exist yet, same as it does
+          # against a developer's local `db` container.
+          POSTGRES_DB: kpinder
         ports:
           - 5432:5432
         options: >-
