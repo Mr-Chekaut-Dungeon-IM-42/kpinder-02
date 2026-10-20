@@ -9,13 +9,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Dummy values so `app.shared.config.Settings` (pydantic-settings, required
-  # fields) can be constructed at import time. No real secret is needed —
-  # nothing in CI talks to a real external service.
-  JWT_SECRET: ci-dummy-secret
-  DATABASE_URL: postgresql+asyncpg://kpinder:kpinder@localhost:5432/kpinder
-
 jobs:
   pr-title:
     name: Conventional Commits (PR title)
@@ -54,6 +47,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
+      # Settings (pydantic-settings) needs JWT_SECRET/DATABASE_URL to construct;
+      # .env.example is the one committed source of truth for these (Makefile
+      # and docker-compose already read it the same way) instead of
+      # duplicating dummy values inline here.
+      - run: cp .env.example backend/.env
       - run: uv sync --all-extras
         working-directory: backend
       - run: uv run pytest -q
@@ -79,13 +77,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
+      - run: cp .env.example backend/.env
       - run: uv sync --all-extras
         working-directory: backend
+      # No TEST_DB_HOST/TEST_DB_PORT override needed: conftest.py's own
+      # defaults (localhost:5432, see ADR-0021) already match where the
+      # `postgres` service above is exposed.
       - run: uv run pytest -q -m integration
         working-directory: backend
-        env:
-          TEST_DB_HOST: localhost
-          TEST_DB_PORT: 5432
 
   backend-test-e2e:
     name: Backend E2E tests (advisory, non-blocking)
@@ -96,13 +95,16 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - name: Start backend + db via docker compose
         run: |
-          cat > .env <<EOF
-          JWT_SECRET=ci-dummy-secret
-          DB_HOST=127.0.0.1
-          DB_PORT=5432
-          APP_HOST=127.0.0.1
-          APP_PORT=8000
-          EOF
+          # .env.example is the single source of truth for every value here
+          # (same file Makefile/docker-compose already read from locally).
+          # The only override is DB_HOST/APP_HOST: GitHub's runners don't
+          # have the 127.0.0.2/127.0.0.3 loopback aliases a local dev machine
+          # might (ADR-0021), so the compose port-bind IP falls back to
+          # 127.0.0.1 here instead.
+          cp .env.example .env
+          echo "DB_HOST=127.0.0.1" >> .env
+          echo "APP_HOST=127.0.0.1" >> .env
+          cp .env.example backend/.env
           docker compose up -d --build backend
       - name: Wait for backend health
         run: |
@@ -113,6 +115,11 @@ jobs:
           echo "backend never became healthy" >&2
           docker compose logs
           exit 1
+      - name: Apply migrations
+        # `/health` doesn't touch the DB, so the container reports healthy
+        # on an empty schema — the e2e journey (signup, etc.) needs the
+        # tables to actually exist first.
+        run: docker compose exec -T backend uv run alembic upgrade head
       - run: uv sync --all-extras
         working-directory: backend
       - run: uv run pytest -q -m e2e
