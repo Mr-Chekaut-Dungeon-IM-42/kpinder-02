@@ -1,7 +1,9 @@
 # Shared/core module as the only cross-slice dependency
 
-- Status: accepted
+- Status: accepted (extended by [ADR-0020](0020-centralized-models-in-shared.md))
 - Date: 2026-10-02
+
+> **Notice (2026-10-15)**: The scope of models in `shared/` was extended by [ADR-0020](0020-centralized-models-in-shared.md) from just user/interest models to all application database models (`User`, `Interest`, `UserInterest`, `Swipe`, `Match`, `Message`). Slices import their models from `app.shared.models`.
 
 ## Context
 

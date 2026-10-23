@@ -37,6 +37,8 @@ ENV/
 .coverage
 htmlcov/
 .mypy_cache/
+mutants/
+.mutmut-cache
 
 # Node / Frontend (React + Vite)
 node_modules/

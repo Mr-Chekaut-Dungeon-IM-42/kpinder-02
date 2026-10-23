@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: kpinder
       POSTGRES_DB: kpinder
     ports:
-      - "5433:5432"
+      - "${DB_HOST:-127.0.0.2}:${DB_PORT:-5432}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -15,14 +15,33 @@ services:
       timeout: 5s
       retries: 5
 
+  db-test:
+    image: postgis/postgis:16-3.4
+    profiles:
+      - test
+    environment:
+      POSTGRES_USER: kpinder
+      POSTGRES_PASSWORD: kpinder
+      POSTGRES_DB: kpinder_test
+    ports:
+      - "${TEST_DB_HOST:-127.0.0.2}:${TEST_DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kpinder -d kpinder_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     env_file:
-      - .env
+      - path: .env
+        required: false
+      - path: backend/.env
+        required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://kpinder:kpinder@db:5432/kpinder
+      DATABASE_URL: postgresql+asyncpg://kpinder:kpinder@${DB_HOST:-db}:5432/kpinder
     ports:
-      - "8000:8000"
+      - "${APP_HOST:-127.0.0.3}:${APP_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy

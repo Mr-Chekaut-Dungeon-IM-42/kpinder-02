@@ -1,7 +1,9 @@
 # Vertical slices over horizontal layers
 
-- Status: accepted
+- Status: accepted (partially amended by [ADR-0020](0020-centralized-models-in-shared.md))
 - Date: 2026-10-02
+
+> **Notice (2026-10-15)**: The statement that slices own their own `models.py` has been amended by [ADR-0020](0020-centralized-models-in-shared.md). All SQLAlchemy models are centralized in `app.shared.models` to eliminate cross-slice model splitting and relationship circularities. Slices own their routers, CQRS commands/queries, and repositories.
 
 ## Context
 

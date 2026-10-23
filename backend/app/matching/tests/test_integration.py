@@ -2,36 +2,13 @@ import asyncio
 import uuid
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from testcontainers.postgres import PostgresContainer
 
-from app.auth.models import Base, User
 from app.matching import repository
-from app.matching.models import Match
+from app.shared.models import Match, User
 
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture(scope="module")
-def postgres_container():
-    with PostgresContainer("postgis/postgis:16-3.4") as container:
-        yield container
-
-
-@pytest.fixture
-async def session_factory(postgres_container):
-    url = postgres_container.get_connection_url().replace(
-        "postgresql+psycopg2", "postgresql+asyncpg"
-    )
-    engine = create_async_engine(url)
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
-        await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    yield factory
-    await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -48,8 +25,22 @@ async def test_concurrent_match_creation_results_in_exactly_one_match(
     """
     user_a_id, user_b_id = uuid.uuid4(), uuid.uuid4()
     async with session_factory() as db:
-        db.add(User(id=user_a_id, email="a@b.com", password_hash="x", name="A"))
-        db.add(User(id=user_b_id, email="b@b.com", password_hash="x", name="B"))
+        db.add(
+            User(
+                id=user_a_id,
+                email=f"a_{user_a_id.hex[:6]}@b.com",
+                password_hash="x",
+                name="A",
+            )
+        )
+        db.add(
+            User(
+                id=user_b_id,
+                email=f"b_{user_b_id.hex[:6]}@b.com",
+                password_hash="x",
+                name="B",
+            )
+        )
         await db.commit()
 
     async with session_factory() as db:
@@ -76,5 +67,17 @@ async def test_concurrent_match_creation_results_in_exactly_one_match(
     assert results == [True, True]
 
     async with session_factory() as db:
-        matches = (await db.execute(select(Match))).scalars().all()
+        matches = (
+            (
+                await db.execute(
+                    select(Match).where(
+                        (Match.user_a_id == user_a_id) & (Match.user_b_id == user_b_id)
+                        | (Match.user_a_id == user_b_id)
+                        & (Match.user_b_id == user_a_id)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert len(matches) == 1
