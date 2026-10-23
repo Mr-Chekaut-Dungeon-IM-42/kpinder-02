@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: Conventional Commits (PR title)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend-lint:
+    name: Backend lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --all-extras
+        working-directory: backend
+      - run: uv run ruff check .
+        working-directory: backend
+      - run: uv run ruff format --check .
+        working-directory: backend
+
+  backend-build:
+    name: Backend build (uv build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv build
+        working-directory: backend
+
+  backend-test-unit:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      # Settings (pydantic-settings) needs JWT_SECRET/DATABASE_URL to construct;
+      # .env.example is the one committed source of truth for these (Makefile
+      # and docker-compose already read it the same way) instead of
+      # duplicating dummy values inline here.
+      - run: cp .env.example backend/.env
+      - run: uv sync --all-extras
+        working-directory: backend
+      - run: uv run pytest -q
+        working-directory: backend
+
+  backend-test-integration:
+    name: Backend integration tests (real Postgres+PostGIS)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: kpinder
+          POSTGRES_PASSWORD: kpinder
+          # kpinder (not kpinder_test): matches the local `db` service
+          # (docker-compose.yml), not `db-test` — conftest.py's
+          # ensure_test_database() connects here as admin and creates
+          # kpinder_test itself if it doesn't exist yet, same as it does
+          # against a developer's local `db` container.
+          POSTGRES_DB: kpinder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U kpinder"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: cp .env.example backend/.env
+      - run: uv sync --all-extras
+        working-directory: backend
+      # No TEST_DB_HOST/TEST_DB_PORT override needed: conftest.py's own
+      # defaults (localhost:5432, see ADR-0021) already match where the
+      # `postgres` service above is exposed.
+      - run: uv run pytest -q -m integration
+        working-directory: backend
+
+  backend-test-e2e:
+    name: Backend E2E tests (advisory, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Resolve APP_HOST (from .env.example, fallback 127.0.0.1)
+        run: |
+          app_host=$(grep -m1 '^APP_HOST=' .env.example | cut -d= -f2)
+          echo "APP_HOST=${app_host:-127.0.0.1}" >> "$GITHUB_ENV"
+      - name: Start backend + db via docker compose
+        run: |
+          # Only APP_HOST is passed through to compose, resolved above — not
+          # the whole .env.example, and not DB_HOST. Two reasons:
+          #  1. .env.example's DB_HOST=localhost isn't a valid literal IP for
+          #     the `db` service's host-port-bind syntax (ADR-0021); setting
+          #     it breaks `docker compose config` outright
+          #     ("invalid IP address: localhost"), confirmed locally.
+          #  2. docker-compose.yml's backend service now hardcodes its own
+          #     DATABASE_URL host as "db" (the Docker-network name) rather
+          #     than reading DB_HOST at all, so there's nothing for this job
+          #     to get right or wrong there either way.
+          # Leaving DB_HOST unset lets the `db` service fall back to its own
+          # default (127.0.0.2, a valid literal IP, routable with zero setup
+          # on Linux runners).
+          echo "APP_HOST=${APP_HOST}" > .env
+          cp .env.example backend/.env
+          docker compose up -d --build backend
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf "http://${APP_HOST}:8000/health" > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "backend never became healthy" >&2
+          docker compose logs
+          exit 1
+      - name: Apply migrations
+        # `/health` doesn't touch the DB, so the container reports healthy
+        # on an empty schema — the e2e journey (signup, etc.) needs the
+        # tables to actually exist first.
+        run: docker compose exec -T backend uv run alembic upgrade head
+      - run: uv sync --all-extras
+        working-directory: backend
+      - run: uv run pytest -q -m e2e
+        working-directory: backend
+        env:
+          E2E_BASE_URL: http://${{ env.APP_HOST }}:8000
+      - if: always()
+        run: docker compose down -v
+
+  frontend-lint:
+    name: Frontend lint (eslint + prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+
+  frontend-build:
+    name: Frontend build (vite build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

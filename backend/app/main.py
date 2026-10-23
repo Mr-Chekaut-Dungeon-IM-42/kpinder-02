@@ -1,4 +1,4 @@
-import subprocess
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,16 +11,15 @@ from app.matching.router import router as matching_router
 from app.shared.config import settings
 
 
-def _git_sha() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+def _deployed_sha() -> str:
+    """Commit SHA of the running build.
 
+    Read from the platform-provided env var rather than `git rev-parse` at
+    runtime (ADR-0023) — the running container has no `.git` directory and
+    no guarantee it ever would.
+    """
+    return os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("GIT_SHA") or "unknown"
 
-_GIT_SHA = _git_sha()
 
 app = FastAPI(
     title="Kpinder API",
@@ -53,4 +52,4 @@ def healthcheck() -> dict[str, str]:
 
 @app.get("/version")
 def version() -> dict[str, str]:
-    return {"sha": _GIT_SHA}
+    return {"sha": _deployed_sha()}

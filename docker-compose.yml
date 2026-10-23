@@ -39,7 +39,16 @@ services:
       - path: backend/.env
         required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://kpinder:kpinder@${DB_HOST:-db}:5432/kpinder
+      # Always "db" — the Docker-network service name, resolvable only from
+      # inside this compose network. DB_HOST (below, in `ports:`) is a
+      # different thing: the *host-side* bind IP for reaching `db` from
+      # outside Docker (ADR-0021). Substituting that into this URL too (as
+      # `${DB_HOST:-db}` used to) broke the backend's own DB connection
+      # whenever DB_HOST was set to anything other than its "db" default —
+      # e.g. .env.example's DB_HOST=localhost (meant for bare-metal/Makefile
+      # use, not compose) made the backend container try to connect to
+      # itself instead of to `db`.
+      DATABASE_URL: postgresql+asyncpg://kpinder:kpinder@db:5432/kpinder
     ports:
       - "${APP_HOST:-127.0.0.3}:${APP_PORT:-8000}:8000"
     depends_on:
