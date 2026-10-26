@@ -12,6 +12,8 @@ Backend is organized as **vertical slices** — one bounded context per feature,
 | `matching` | candidate feed, swipe, match detection, paginated match list | `shared` |
 | `chat` | message CRUD (send/list/edit/delete), in-conversation search, live push over WebSocket | `shared` |
 
+`libs/matching-core/` is a separate package, not a slice — the `matching` slice's candidate-selection/ranking logic, extracted behind its own ports so it has zero SQLAlchemy/FastAPI imports (ADR-0026, `ai/audit/lab-5.md`). `app/matching/adapters.py` is the only file that imports both it and SQLAlchemy.
+
 `shared/` (core) is not a slice — it's infrastructure every slice depends on, and never the other way around:
 - DB session factory
 - JWT-verify dependency (identifies the current user for any slice's router; a pure signature/expiry check, no DB access — ADR-0013)
@@ -173,8 +175,41 @@ All four tiers are now implemented against `auth`, `matching`, and `chat`: unit 
 
 ## 7. Standards
 
-See `standards/` for ADR format (MADR), Definition of Done, and the audit checklist. ADRs are written only for genuinely contested decisions (vertical slices vs layered, shared-core boundary rule, Redis as event bus, WebSockets vs polling, PostGIS vs plain lat/lng, swipe+mutual-match vs auto-match, JWT vs sessions, Railway+Vercel as staging hosts, native-platform CD vs Actions-driven deploy, Conventional Commits on the PR title, GitHub Actions as CI runner) — not for routine stack picks.
+See `standards/` for ADR format (MADR), Definition of Done, and the audit checklist. ADRs are written only for genuinely contested decisions (vertical slices vs layered, shared-core boundary rule, Redis as event bus, WebSockets vs polling, PostGIS vs plain lat/lng, swipe+mutual-match vs auto-match, JWT vs sessions, Railway+Vercel as staging hosts, native-platform CD vs Actions-driven deploy, Conventional Commits on the PR title, GitHub Actions as CI runner, CQRS for DI, extracting matching-core as a ports-based library) — not for routine stack picks.
 
 ## 8. AI trail
 
 This spec was shaped through an AI-assisted design interview. The full prompt trail is in [`ai/prompts/`](ai/prompts/), and a self-audit of where the AI's suggestions cut corners (and were corrected) is in [`ai/audit/lab-2.md`](ai/audit/lab-2.md) — each entry links the originating prompt, the human's correction, and the resulting change to this spec.
+
+## 9. Load scenarios & performance
+
+Lab 5 added a load-testing/profiling pass over the system described above.
+Full methodology, baseline numbers, and the audit are in
+[`ai/audit/lab-5.md`](ai/audit/lab-5.md); this section records what "typical
+service work" means as a load scenario, so it stays a spec fact rather than
+living only in a lab writeup.
+
+**Weighted mixed journey** (`backend/loadtest/locustfile.py`, run via
+`make load`): one simulated user logs in once, then repeatedly performs a
+weighted mix of actions, matching real swiping behavior — feed browsing and
+swiping dominate, matches/chat are occasional:
+
+| Action | Weight |
+|---|---|
+| `GET /matching/feed` | 10 |
+| `POST /matching/swipe` | 6 |
+| `GET /matching/matches` | 3 |
+| `GET /chat/{match_id}/messages` | 2 |
+| `POST /chat/{match_id}/messages` | 1 |
+
+Run against a local `docker-compose` stack seeded with ~50k users
+(`make seed-load`, `backend/scripts/seed_load_data.py`) — realistic enough
+data volume for Postgres's planner to make real index-vs-seqscan choices and
+for percentile latencies to mean something, reproducible without touching
+Railway staging (ADR-0022 already flags its trial credit as a scarce
+resource not to burn on load testing).
+
+`matching.GetFeedQuery`'s candidate-selection/ranking logic was identified
+as the module whose own design doesn't scale under this load (ADR-0026) and
+was extracted to `libs/matching-core/` as a result — see §1 and
+`ai/audit/lab-5.md` for the data and the top-3 bottleneck findings.

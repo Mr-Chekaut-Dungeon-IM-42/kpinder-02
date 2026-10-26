@@ -17,11 +17,17 @@ dependencies = [
     "pyjwt>=2.9.0",
     "boto3>=1.35.0",
     "python-multipart>=0.0.12",
+    "matching-core",
 ]
+
+[tool.uv.sources]
+matching-core = { path = "../libs/matching-core", editable = true }
 
 [dependency-groups]
 dev = [
     "httpx>=0.27.0",
+    "locust>=2.47.0",
+    "py-spy>=0.4.2",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "ruff>=0.9.0",
@@ -56,17 +62,23 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query"]
 
 [tool.mutmut]
+# matching/queries.py's GetFeedQuery is now a thin adapter (standards/adr/0026)
+# — its own candidate-selection/ranking logic moved to libs/matching-core,
+# which has its own full-branch-coverage unit tests (libs/matching-core/tests)
+# but isn't mutation-tested from here; see ai/audit/lab-5.md for why that's an
+# accepted, documented gap rather than an oversight.
 source_paths = [
     "app/chat/commands.py",
     "app/chat/queries.py",
     "app/matching/commands.py",
-    "app/matching/queries.py",
+    "app/matching/adapters.py",
     "app/auth/commands.py",
     "app/auth/queries.py",
 ]
 pytest_add_cli_args_test_selection = [
     "app/chat/tests/test_cqrs.py",
     "app/matching/tests/test_cqrs.py",
+    "app/matching/tests/test_feed_adapter.py",
     "app/auth/tests/test_service.py",
     "app/auth/tests/test_profile_service.py",
     "app/auth/tests/test_photo_upload.py",
