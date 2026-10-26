@@ -73,11 +73,20 @@ implementations" means, concretely, that `matching_core` never imports
 `app.*` at all, and `app/matching/adapters.py` is the *only* file in the
 slice that imports both `matching_core` and SQLAlchemy.
 
-This is a behavior-preserving move, not a fix: the 500-row fetch limit, the
-`ORDER BY User.id` candidate ordering, and the Jaccard ranking are
-unchanged. The point of this lab was to localize and protect the bottleneck
-behind a clean, independently-testable boundary — not to redesign the
-ranking algorithm, which is a separate, larger change (see Known gaps).
+This is a behavior-preserving move, not a fix, for the thing the extraction
+was actually scoped to: the 500-row fetch limit, the `ORDER BY User.id`
+candidate ordering, and the Jaccard ranking are unchanged. The point of
+this lab was to localize and protect the bottleneck behind a clean,
+independently-testable boundary — not to redesign the ranking algorithm,
+which is a separate, larger change (see Known gaps). One smaller thing in
+the same module *was* fixed during the move, not just carried over: photo
+URL resolution for the returned candidates was sequential (N candidates
+with photos = N awaited round-trips, one after another); `FeedService`
+resolves them concurrently via `asyncio.gather` instead, with a regression
+test (`test_photo_urls_are_resolved_concurrently`) that proves the
+concurrency rather than just the output (see `ai/audit/lab-5.md`'s
+"secondary finding"). This was in scope because it lived in the exact code
+being moved, unlike the fetch-limit/ranking question above.
 
 ## Alternatives considered
 

@@ -30,7 +30,8 @@ A second real bug was found and is **not** the extraction target, but was fixed 
 - `FeedService` (the extracted `GetFeedQuery`) raises its own typed errors (`CallerNotFoundError`, `LocationRequiredError`) instead of `HTTPException`.
 - `app/matching/adapters.py` is the only file in the backend that imports both `matching_core` and SQLAlchemy — it implements both ports against the real DB/R2 storage.
 - `app/matching/queries.py`'s `GetFeedQuery` is now a ~40-line adapter: wire the service, call it, translate the two typed errors to the two HTTP statuses the API contract already promised.
-- **Behavior-preserving, not a fix**: the 500-row fetch limit and the ranking algorithm are unchanged. This ADR protects the bottleneck behind a boundary that makes it independently testable and benchmarkable; it does not resolve the latency itself. See ADR-0026 "Known gaps" and the audit's top-3 for what the actual fix would be.
+- **Behavior-preserving for the actual bottleneck, not a fix**: the 500-row fetch limit and the ranking algorithm are unchanged. This ADR protects the bottleneck behind a boundary that makes it independently testable and benchmarkable; it does not resolve the latency itself. See ADR-0026 "Known gaps" and the audit's top-3 for what the actual fix would be.
+- **One smaller thing in the same module was fixed, not just carried over**: the pre-extraction code resolved each returned candidate's photo URL with a sequential `await` (N candidates with photos = N round-trips, one after another). `FeedService` now resolves them concurrently via `asyncio.gather`, with a regression test that proves the concurrency itself (it uses a fake resolver that only completes once every candidate's `resolve()` has started — a reversion to sequential awaits makes the test time out, not silently pass).
 
 Full design rationale and alternatives considered: `standards/adr/0026-matching-core-extraction.md`.
 

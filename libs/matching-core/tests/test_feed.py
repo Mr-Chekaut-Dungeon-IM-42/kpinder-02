@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from matching_core.errors import CallerNotFoundError, LocationRequiredError
@@ -124,3 +126,41 @@ async def test_no_photo_resolver_leaves_photo_url_none(make_caller, make_candida
     )
 
     assert results[0].photo_url is None
+
+
+class ConcurrencyTrackingPhotoResolver:
+    """Proves photo URLs are resolved concurrently (asyncio.gather), not one
+    await at a time — regression guard for ai/audit/lab-5.md's "secondary
+    finding". Each resolve() blocks until every candidate's resolve() has
+    started; a sequential implementation would deadlock here instead of
+    completing, which is exactly the point."""
+
+    def __init__(self, n_expected: int) -> None:
+        self._n_expected = n_expected
+        self._in_flight = 0
+        self._all_started = asyncio.Event()
+        self.max_concurrent = 0
+
+    async def resolve(self, photo_key: str) -> str | None:
+        self._in_flight += 1
+        self.max_concurrent = max(self.max_concurrent, self._in_flight)
+        if self._in_flight == self._n_expected:
+            self._all_started.set()
+        await asyncio.wait_for(self._all_started.wait(), timeout=1.0)
+        self._in_flight -= 1
+        return f"url-for-{photo_key}"
+
+
+@pytest.mark.asyncio
+async def test_photo_urls_are_resolved_concurrently(make_caller, make_candidate):
+    caller = make_caller()
+    candidates = [make_candidate(id=str(i), photo_key=f"key-{i}") for i in range(5)]
+    repo = FakeRepository(caller=caller, candidates=candidates)
+    resolver = ConcurrencyTrackingPhotoResolver(n_expected=5)
+
+    results = await FeedService(repository=repo, photo_resolver=resolver).get_feed(
+        caller.id, radius_km=50.0, feed_size=5
+    )
+
+    assert resolver.max_concurrent == 5
+    assert {r.photo_url for r in results} == {f"url-for-key-{i}" for i in range(5)}
