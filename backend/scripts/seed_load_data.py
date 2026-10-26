@@ -196,7 +196,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--database-url",
-        default="postgresql://kpinder:kpinder@127.0.0.2:5433/kpinder",
+        default="postgresql://kpinder:kpinder@127.0.0.2:5432/kpinder",
         help="Plain (non-SQLAlchemy) asyncpg DSN — note: no '+asyncpg' scheme suffix.",
     )
     parser.add_argument("--users", type=int, default=50_000)

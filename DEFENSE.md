@@ -21,7 +21,7 @@ Full methodology, every number below, and the frontend audit are in [`ai/audit/l
 
 A 15-20x blowup, **not** explained by DB connection pool size (10x bump made no measurable difference) and **not** explained by a missing index (`EXPLAIN ANALYZE` confirms the GiST index on `location` is used correctly, ~73ms DB-side). The actual cause: `GetFeedQuery` fetches `limit=500` full `User` rows per request and decodes all of them — measured at ~10-18ms of real, synchronous CPU time per request, on the single uvicorn event-loop thread every other concurrent request shares. At 150 concurrent requests that's ~1.5-2.7s of CPU demand against one effective core, which is exactly the queueing collapse measured.
 
-A second real bug was found and is **not** the extraction target: `auth.LoginCommand` calls Argon2 verification synchronously inside an `async def`, blocking the entire process under concurrent logins (removing login from the load mix roughly doubled throughput). It's real and worth a follow-up one-line fix, but there's no module boundary to draw around it — the brief asked for one module to extract, and `matching`'s feed path is the one rich enough (repository + algorithm + DI) to be a meaningful extraction, independently confirmed as the one whose *design*, not configuration, causes the degradation.
+A second real bug was found and is **not** the extraction target, but was fixed directly: `auth.LoginCommand` called Argon2 verification synchronously inside an `async def`, blocking the entire process under concurrent logins (removing login from the load mix roughly doubled throughput). There's no module boundary to draw around "don't block the event loop," so instead of extracting anything, `hash_password`/`verify_password` (`app/shared/security.py`) now run Argon2 via `anyio.to_thread.run_sync`. Re-running the exact same 150-concurrent, login-in-the-mix scenario against the fix confirms it: throughput went from ~35 req/s to ~69 req/s, matching the previously-isolated (no-login) range. `matching`'s feed path is still the one rich enough (repository + algorithm + DI) to be this lab's actual extraction target — it's the one whose *design*, not a missing thread-offload, causes its degradation.
 
 ## Extraction: `libs/matching-core`
 
@@ -61,7 +61,7 @@ Findings (not fixed — out of scope for this lab's extraction, recorded for the
 ## Top 3 (full detail in `ai/audit/lab-5.md` Part D)
 
 1. `matching.GetFeedQuery`'s over-fetch-and-decode-in-Python design — localized and protected, not yet fixed.
-2. `auth.LoginCommand`'s blocking Argon2 call — real, found, not extracted (no boundary to draw), flagged for a follow-up.
+2. `auth.LoginCommand`'s blocking Argon2 call — real, found, not extracted (no boundary to draw), fixed directly and the ~35→~69 req/s recovery confirmed empirically.
 3. Frontend color-contrast failure on the shared brand color — one root cause, four pages.
 
 ## Infra change this lab requires (manual, one-time)
@@ -71,7 +71,6 @@ Extracting `libs/matching-core` as a local uv path dependency means `backend/Doc
 ## Known gaps / honest scope cuts
 
 - The feed endpoint's actual latency under load is unchanged by the extraction — it was scoped as behavior-preserving (see ADR-0026). The real fix (push ranking into the DB query, or cap the fetch much closer to `feed_size`) is a separate, larger change.
-- `auth.LoginCommand`'s blocking call is not fixed in this lab.
 - py-spy flamegraph capture requires interactive `sudo` on macOS, which wasn't available non-interactively while producing this audit — `time.process_time()` instrumentation was used instead and is documented as such, not hidden. `make profile` works for anyone re-running this with sudo access.
 - `libs/matching-core` is not yet covered by `mutmut`.
 - Frontend accessibility/SEO findings above are recorded, not fixed.

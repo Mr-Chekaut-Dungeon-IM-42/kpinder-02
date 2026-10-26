@@ -14,16 +14,24 @@ Scope: load-testing methodology and baseline (`backend/loadtest/locustfile.py`, 
 
 ## Part B — baseline, bottleneck localization
 
-### B.1 — `auth.LoginCommand` blocks the entire event loop (found, not the extraction target)
+### B.1 — `auth.LoginCommand` blocked the entire event loop (found and fixed)
 
-`verify_password` (Argon2) is called synchronously inside `async def execute(...)` with no thread offload. Measured by running the same 150-concurrent-user Locust scenario twice, identical in every way except whether `on_start` calls `/auth/login` or reuses a pre-fetched token:
+`verify_password` (Argon2) was called synchronously inside `async def execute(...)` with no thread offload. Measured by running the same 150-concurrent-user Locust scenario twice, identical in every way except whether `on_start` calls `/auth/login` or reuses a pre-fetched token:
 
 | Scenario | Aggregate throughput |
 |---|---|
-| With per-user login in the mix | ~35 req/s |
+| With per-user login in the mix (before fix) | ~35 req/s |
 | Same load, logins skipped (pre-fetched tokens) | ~67-75 req/s |
 
-Removing login from the mix roughly **doubled** throughput — a single synchronous CPU-bound call inside an `async def` with no `run_in_threadpool`/`anyio.to_thread` serializes the *entire* process, not just `/auth/login` itself. This is a real, clearly-evidenced, one-line-fixable bug (`await anyio.to_thread.run_sync(verify_password, ...)`). It's recorded here rather than fixed in this lab: it's shallow (one line, no module boundary to design around) and the brief asks for one module to extract — see B.2 for the one that is.
+Removing login from the mix roughly **doubled** throughput — a single synchronous CPU-bound call inside an `async def` with no `run_in_threadpool`/`anyio.to_thread` serializes the *entire* process, not just `/auth/login` itself. Unlike B.2, this one is shallow (no module boundary to design around), so it was fixed directly rather than just recorded: `app/shared/security.py`'s `hash_password`/`verify_password` now both run Argon2 via `anyio.to_thread.run_sync`, and both call sites (`SignupCommand`, `LoginCommand` in `app/auth/commands.py`) `await` them.
+
+**Fix verified empirically**, not just by passing unit tests — re-ran the exact same 150-concurrent, login-in-the-mix scenario against the fixed code:
+
+| Scenario | Aggregate throughput |
+|---|---|
+| With per-user login in the mix (after fix) | ~69 req/s (3088 reqs / 45s) |
+
+This now matches the previously-isolated (no-login) throughput range almost exactly, confirming login no longer drags the rest of the process down with it.
 
 ### B.2 — `matching.GetFeedQuery` is the module that doesn't scale (the extraction target)
 
@@ -68,7 +76,7 @@ The GiST index (`idx_users_location`) **is** being used correctly — this isn't
 
 ### B.3 — why `matching.GetFeedQuery`, and not `auth.LoginCommand`, is the extraction target
 
-Both are real bugs. `LoginCommand`'s is a one-line fix with no design to protect — there's no module boundary to draw around "don't call a blocking function synchronously." `GetFeedQuery`'s is a design flaw in a module that's rich enough to extract meaningfully: a repository query, a ranking algorithm, and dependencies (DB, photo storage) that benefit from being made abstract. See `ai/audit/lab-5.md`'s sibling, ADR-0026, for the extraction itself.
+Both are real bugs. `LoginCommand`'s was a one-line fix with no design to protect — there's no module boundary to draw around "don't call a blocking function synchronously," so it was fixed directly instead (B.1). `GetFeedQuery`'s is a design flaw in a module that's rich enough to extract meaningfully: a repository query, a ranking algorithm, and dependencies (DB, photo storage) that benefit from being made abstract. See `ai/audit/lab-5.md`'s sibling, ADR-0026, for the extraction itself.
 
 ## Part C — frontend audit (Lighthouse, production build)
 
@@ -93,5 +101,5 @@ None of these were fixed as part of this lab (the frontend audit's brief was to 
 ## Part D — top 3
 
 1. **`matching.GetFeedQuery`'s over-fetch-and-decode-in-Python design** (Part B.2) — 15-20x latency blowup under concurrency, root-caused to CPU-bound synchronous row decoding on the single event-loop thread, not DB tuning. Localized and protected behind `libs/matching-core`'s port boundary (ADR-0026); **not yet fixed** — the fix (push ranking into the DB query, or cap the fetch far closer to `feed_size`) is a documented known gap, not folded into a behavior-preserving extraction.
-2. **`auth.LoginCommand`'s blocking Argon2 call** (Part B.1) — a synchronous CPU-bound call inside an async handler serializes the *entire* process under concurrent login load (roughly 2x throughput recovered in isolation). Not extracted (no module boundary to draw), but is the single highest-leverage one-line fix in the whole audit — flagged for a follow-up PR.
+2. **`auth.LoginCommand`'s blocking Argon2 call** (Part B.1) — a synchronous CPU-bound call inside an async handler serialized the *entire* process under concurrent login load. Not extracted (no module boundary to draw), but was the single highest-leverage one-line fix in the whole audit — fixed directly (`anyio.to_thread.run_sync`), with the ~35→~69 req/s recovery confirmed empirically, not just by unit tests.
 3. **Frontend color-contrast failures on the shared brand color** (Part C) — same `#e8457a` combination fails WCAG AA on every authenticated page's nav and primary action button, because it's one shared value used in multiple places, not four separate bugs.

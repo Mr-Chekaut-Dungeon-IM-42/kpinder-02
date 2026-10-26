@@ -2,7 +2,7 @@
 
 run-api:
 	set -a; [ -f .env ] && . ./.env; set +a; \
-	cd backend && uv run uvicorn app.main:app --host "$${APP_HOST:-127.0.0.1}" --port "$${APP_PORT:-8000}" --reload
+	cd backend && uv run uvicorn app.main:app --host "$${APP_HOST:-127.0.0.2}" --port "$${APP_PORT:-8000}" --reload
 
 ENV_PATH := backend/.env
 
@@ -46,12 +46,12 @@ check: lint test build
 seed-load:
 	set -a; [ -f $(ENV_PATH) ] && . $(ENV_PATH); set +a; \
 	cd backend && uv run python scripts/seed_load_data.py \
-		--database-url "$${LOAD_DATABASE_URL:-postgresql://kpinder:kpinder@127.0.0.2:5433/kpinder}" \
+		--database-url "$${LOAD_DATABASE_URL:-postgresql://kpinder:kpinder@127.0.0.2:5432/kpinder}" \
 		--users "$${LOAD_USERS:-50000}"
 
 load:
 	cd backend && uv run locust -f loadtest/locustfile.py \
-		--host "$${LOAD_HOST:-http://127.0.0.6:8000}" \
+		--host "$${LOAD_HOST:-http://127.0.0.2:8000}" \
 		--headless --users "$${LOAD_CONCURRENCY:-150}" --spawn-rate 25 \
 		--run-time "$${LOAD_DURATION:-60s}" --csv /tmp/kpinder_load
 

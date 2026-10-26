@@ -48,7 +48,7 @@ async def test_login_success():
     user = User(
         id=uuid.uuid4(),
         email="a@b.com",
-        password_hash=hash_password("password123"),
+        password_hash=await hash_password("password123"),
         name="Alice",
     )
     with patch("app.auth.commands.repository.get_user_by_email", return_value=user):
@@ -65,7 +65,7 @@ async def test_login_wrong_password_raises_401():
     user = User(
         id=uuid.uuid4(),
         email="a@b.com",
-        password_hash=hash_password("password123"),
+        password_hash=await hash_password("password123"),
         name="Alice",
     )
     with (
