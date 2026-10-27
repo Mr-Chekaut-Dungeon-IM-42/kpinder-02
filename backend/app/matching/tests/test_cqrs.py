@@ -7,14 +7,10 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.matching.commands import SwipeCommand
-from app.matching.common import decode_cursor, encode_cursor, jaccard
-from app.matching.queries import GetFeedQuery, GetMatchesQuery
+from app.matching.common import decode_cursor, encode_cursor
+from app.matching.queries import GetMatchesQuery
 from app.matching.schemas import SwipeRequest
-from app.shared.models import Interest, Match, Swipe, User, UserInterest
-
-
-def test_jaccard_both_empty_scores_zero():
-    assert jaccard(set(), set()) == 0.0
+from app.shared.models import Match, Swipe, User
 
 
 def _user(**kwargs) -> User:
@@ -25,125 +21,11 @@ def _user(**kwargs) -> User:
     return user
 
 
-def _with_interests(user: User, *names: str) -> User:
-    user.interests = [
-        UserInterest(interest=Interest(id=uuid.uuid4(), name=name)) for name in names
-    ]
-    return user
-
-
-# --- GetFeedQuery Tests ---
-
-
-@pytest.mark.asyncio
-async def test_get_feed_unknown_caller_raises_404():
-    db = AsyncMock()
-    with (
-        patch(
-            "app.matching.queries.repository.get_user_with_interests",
-            return_value=None,
-        ),
-        pytest.raises(HTTPException) as exc_info,
-    ):
-        query = GetFeedQuery(db=db)
-        await query.execute(uuid.uuid4())
-    assert exc_info.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_get_feed_resolves_photo_url_for_candidate_with_photo():
-    db = AsyncMock()
-    caller = _with_interests(_user(location="POINT"), "hiking")
-    candidate = _with_interests(
-        _user(photo_key="some-key.jpg", age=29, bio="Hello"), "hiking"
-    )
-
-    with (
-        patch(
-            "app.matching.queries.repository.get_user_with_interests",
-            return_value=caller,
-        ),
-        patch(
-            "app.matching.queries.repository.get_candidates",
-            return_value=[candidate],
-        ),
-        patch("app.matching.common.get_photo_storage", return_value="storage"),
-        patch(
-            "app.matching.common.resolve_photo_url",
-            return_value="https://example.com/photo.jpg",
-        ) as resolve_mock,
-    ):
-        query = GetFeedQuery(db=db)
-        result = await query.execute(caller.id)
-
-    assert result[0].photo_url == "https://example.com/photo.jpg"
-    assert result[0].age == 29
-    assert result[0].bio == "Hello"
-    resolve_mock.assert_awaited_once_with("storage", "some-key.jpg")
-
-
-@pytest.mark.asyncio
-async def test_get_feed_requires_location():
-    db = AsyncMock()
-    caller = _user(location=None)
-    with (
-        patch(
-            "app.matching.queries.repository.get_user_with_interests",
-            return_value=caller,
-        ),
-        pytest.raises(HTTPException) as exc_info,
-    ):
-        query = GetFeedQuery(db=db)
-        await query.execute(caller.id)
-    assert exc_info.value.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_get_feed_sorts_by_interest_overlap():
-    db = AsyncMock()
-    caller = _with_interests(_user(location="POINT"), "hiking", "coffee")
-    low = _with_interests(_user(), "wine")
-    high = _with_interests(_user(), "hiking", "coffee")
-
-    with (
-        patch(
-            "app.matching.queries.repository.get_user_with_interests",
-            return_value=caller,
-        ),
-        patch(
-            "app.matching.queries.repository.get_candidates",
-            return_value=[low, high],
-        ),
-    ):
-        query = GetFeedQuery(db=db)
-        result = await query.execute(caller.id)
-
-    assert [c.id for c in result] == [high.id, low.id]
-
-
-@pytest.mark.asyncio
-async def test_get_feed_ranks_by_jaccard_ratio_not_raw_intersection_size():
-    db = AsyncMock()
-    caller = _with_interests(_user(location="POINT"), "a", "b", "c")
-    tight_fit = _with_interests(_user(), "a", "b")
-    broad_overlap = _with_interests(
-        _user(), "a", "b", "c", "d", "e", "f", "g", "h", "i", "j"
-    )
-
-    with (
-        patch(
-            "app.matching.queries.repository.get_user_with_interests",
-            return_value=caller,
-        ),
-        patch(
-            "app.matching.queries.repository.get_candidates",
-            return_value=[broad_overlap, tight_fit],
-        ),
-    ):
-        query = GetFeedQuery(db=db)
-        result = await query.execute(caller.id)
-
-    assert [c.id for c in result] == [tight_fit.id, broad_overlap.id]
+# GetFeedQuery's own ranking/selection logic is tested against
+# matching_core's FeedService directly (libs/matching-core/tests/
+# test_feed.py, with in-memory fakes — no SQLAlchemy mocking needed).
+# app/matching/tests/test_feed_adapter.py covers the thin adapter glue
+# (error translation, schema mapping) that lives in this app instead.
 
 
 # --- SwipeCommand Tests ---

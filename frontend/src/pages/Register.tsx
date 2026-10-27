@@ -36,7 +36,7 @@ export default function Register() {
   }
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <div className={styles.card}>
         <h1 className={styles.title}>Create an account</h1>
         <form className={styles.form} onSubmit={handleSubmit}>
@@ -80,6 +80,6 @@ export default function Register() {
           Already have an account? <Link to="/login">Log in</Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

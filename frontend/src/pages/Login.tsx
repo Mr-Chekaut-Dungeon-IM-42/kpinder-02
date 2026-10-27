@@ -37,7 +37,7 @@ export default function Login() {
   }
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <div className={styles.card}>
         <h1 className={styles.title}>Log in</h1>
         {justRegistered && (
@@ -73,6 +73,6 @@ export default function Login() {
           Don't have an account? <Link to="/register">Sign up</Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

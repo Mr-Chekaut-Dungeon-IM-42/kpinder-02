@@ -85,6 +85,8 @@ class Match(Base):
     __table_args__ = (
         UniqueConstraint("user_a_id", "user_b_id"),
         Index("ix_matches_created_at_id", "created_at", "id"),
+        Index("ix_matches_user_a_created_at", "user_a_id", "created_at", "id"),
+        Index("ix_matches_user_b_created_at", "user_b_id", "created_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

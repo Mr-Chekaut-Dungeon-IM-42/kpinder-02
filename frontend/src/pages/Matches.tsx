@@ -53,7 +53,7 @@ function MatchesView({ token }: { token: string }) {
   }
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <NavBar />
       <div className={styles.card}>
         <h1 className={styles.title}>Your matches</h1>
@@ -92,6 +92,6 @@ function MatchesView({ token }: { token: string }) {
           </button>
         )}
       </div>
-    </div>
+    </main>
   );
 }
