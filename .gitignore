@@ -67,3 +67,5 @@ storage/
 Thumbs.db
 .vercel
 .env*.local
+
+*.svg
