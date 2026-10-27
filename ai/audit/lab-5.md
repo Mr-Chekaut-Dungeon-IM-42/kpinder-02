@@ -185,8 +185,6 @@ Run against `vite build && vite preview` across all 4 authenticated pages:
 
 The following 6 concrete architectural and performance issues were audited, localized, and resolved, divided equally between the two team members:
 
-### Студент 1 (Іван Федоренко) — Backend, Concurrency & Algorithms
-
 #### 1. Over-fetching & ORM Decoding in `get_candidates`
 - **Issue:** Hardcoded `limit=500` candidates with eager `selectinload(User.interests)` meant 500 ORM objects and thousands of interest tags decoded synchronously on the event loop (~15ms CPU). Also utilized an unnecessary `scalar_subquery` for caller location.
 - **Resolution:** Lowered candidate fetch pool from 500 to 50 (`DEFAULT_CANDIDATE_FETCH_LIMIT = 50`), providing a 2.5x buffer for Jaccard ranking without 25x over-fetch penalties. Passed `caller.location` directly into `ST_DWithin`.
@@ -201,10 +199,6 @@ The following 6 concrete architectural and performance issues were audited, loca
 - **Issue:** Pre-extraction candidate processing resolved photo presigned URLs sequentially in a loop (`[await storage.get_url(...) for c in candidates]`), adding serial network round-trips.
 - **Resolution:** Implemented concurrent resolution in `FeedService` via `asyncio.gather` with a regression test ensuring non-sequential execution.
 - **Status:** **`[FIXED]`** (Regression test `test_photo_urls_are_resolved_concurrently` passing).
-
----
-
-### Студент 2 (Лобан Михайло) — Database, Infra, Frontend & Web-Vitals
 
 #### 4. Missing Composite B-Tree Indexes on `matches` Pagination
 - **Issue:** `get_matches_page` filters `WHERE user_a_id = :id OR user_b_id = :id ORDER BY created_at DESC`. The table had only `UNIQUE (user_a_id, user_b_id)`, which violated the B-tree left-prefix rule for `user_b_id`, forcing full Seq Scan and in-memory sort.
