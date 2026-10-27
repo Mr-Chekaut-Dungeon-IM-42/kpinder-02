@@ -32,7 +32,7 @@
 .logout {
   border: none;
   background: transparent;
-  color: #e8457a;
+  color: #c2255c;
   cursor: pointer;
   font-size: 0.9rem;
 }
@@ -81,7 +81,7 @@
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  outline: 2px solid #e8457a;
+  outline: 2px solid #c2255c;
   border-color: transparent;
 }
 
@@ -103,8 +103,8 @@
 
 .chipSelected {
   composes: chip;
-  background: #e8457a;
-  border-color: #e8457a;
+  background: #c2255c;
+  border-color: #c2255c;
   color: white;
 }
 
@@ -144,7 +144,7 @@
   padding: 0.7rem;
   border: none;
   border-radius: 8px;
-  background: #e8457a;
+  background: #c2255c;
   color: white;
   font-size: 1rem;
   cursor: pointer;
@@ -158,9 +158,9 @@
 .secondary {
   padding: 0.5rem 0.9rem;
   border-radius: 8px;
-  border: 1px solid #e8457a;
+  border: 1px solid #c2255c;
   background: white;
-  color: #e8457a;
+  color: #c2255c;
   font-size: 0.9rem;
   cursor: pointer;
 }

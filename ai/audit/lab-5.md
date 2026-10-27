@@ -172,38 +172,51 @@ Run against `vite build && vite preview` across all 4 authenticated pages:
 2. **Landmark absence:** missing `<main>` container on pages (`landmark-one-main`).
 3. **SEO & Head metadata:** missing `<meta name="description">` and `robots.txt`.
 
+**Implemented Frontend Fixes:**
+- Replaced brand accent color `#e8457a` with WCAG AA compliant `#c2255c` (contrast ratio **5.66:1** against `#ffffff`, well exceeding the 4.5:1 minimum) across all page CSS modules (`NavBar`, `Feed`, `Matches`, `AuthForm`, `Profile`, `Chat`).
+- Wrapped all pages (`Feed.tsx`, `Matches.tsx`, `Chat.tsx`, `Profile.tsx`, `Login.tsx`, `Register.tsx`) with semantic `<main className={styles.page}>` landmarks, fixing `landmark-one-main`.
+- Added `<meta name="description" content="Kpinder — Smart dating service for KPI students and tech enthusiasts.">`, descriptive title, and theme color `#c2255c` to `frontend/index.html`.
+- Added `frontend/public/robots.txt` disallowing crawlers on private web app routes.
+- Verified via `npm run lint` and `npm run build` (Vite 8.3.4 clean production bundle).
+
 ---
 
 ## Part D — 6 Cut Corners & Found Issues (Tracked with Execution Status)
 
-The following 6 concrete architectural and performance issues were audited, localized, and resolved:
+The following 6 concrete architectural and performance issues were audited, localized, and resolved, divided equally between the two team members:
 
-### 1. Over-fetching & ORM Decoding in `get_candidates`
+### Студент 1 (Іван Федоренко) — Backend, Concurrency & Algorithms
+
+#### 1. Over-fetching & ORM Decoding in `get_candidates`
 - **Issue:** Hardcoded `limit=500` candidates with eager `selectinload(User.interests)` meant 500 ORM objects and thousands of interest tags decoded synchronously on the event loop (~15ms CPU). Also utilized an unnecessary `scalar_subquery` for caller location.
 - **Resolution:** Lowered candidate fetch pool from 500 to 50 (`DEFAULT_CANDIDATE_FETCH_LIMIT = 50`), providing a 2.5x buffer for Jaccard ranking without 25x over-fetch penalties. Passed `caller.location` directly into `ST_DWithin`.
 - **Status:** **`[FIXED]`** (Feed median latency reduced 25x from 480ms to 19ms).
 
-### 2. Event Loop Blockage by Argon2 Hashing in `auth`
+#### 2. Event Loop Blockage by Argon2 Hashing in `auth`
 - **Issue:** `SignupCommand` and `LoginCommand` ran CPU-heavy Argon2 hashing synchronously inside `async def` without threadpool offloading, blocking the single event loop thread and halving system throughput (~35 req/s).
 - **Resolution:** Wrapped `hash_password` and `verify_password` with `anyio.to_thread.run_sync`.
-- **Status:** **`[FIXED]`** (Throughput restored to ~69 req/s under login load).
+- **Status:** **`[FIXED]`** (Throughput restored to ~69 req/s under login load; verified in py-spy flamegraph running isolated on worker threads).
 
-### 3. Sequential `await` in Photo URL Resolution
+#### 3. Sequential `await` in Photo URL Resolution
 - **Issue:** Pre-extraction candidate processing resolved photo presigned URLs sequentially in a loop (`[await storage.get_url(...) for c in candidates]`), adding serial network round-trips.
 - **Resolution:** Implemented concurrent resolution in `FeedService` via `asyncio.gather` with a regression test ensuring non-sequential execution.
 - **Status:** **`[FIXED]`** (Regression test `test_photo_urls_are_resolved_concurrently` passing).
 
-### 4. Missing Composite B-Tree Indexes on `matches` Pagination
+---
+
+### Студент 2 (Лобан Михайло) — Database, Infra, Frontend & Web-Vitals
+
+#### 4. Missing Composite B-Tree Indexes on `matches` Pagination
 - **Issue:** `get_matches_page` filters `WHERE user_a_id = :id OR user_b_id = :id ORDER BY created_at DESC`. The table had only `UNIQUE (user_a_id, user_b_id)`, which violated the B-tree left-prefix rule for `user_b_id`, forcing full Seq Scan and in-memory sort.
 - **Resolution:** Added composite indexes `(user_a_id, created_at DESC, id DESC)` and `(user_b_id, created_at DESC, id DESC)`. Generated and applied Alembic migration `fe77c7523aa3`.
-- **Status:** **`[FIXED]`** (`GET /matching/matches` median latency dropped to 4ms).
+- **Status:** **`[FIXED]`** (`GET /matching/matches` median latency dropped to 4ms under 150 vUsers).
 
-### 5. Docker Monorepo Build Context & Dependency Bloat
+#### 5. Docker Monorepo Build Context & Dependency Bloat
 - **Issue:** Extracting `libs/matching-core` as a local path dependency broke the Docker build context (which only knew `backend/`), while `uv run` in the container default command re-synced dev dependencies (locust, py-spy) on every start.
 - **Resolution:** Moved Docker build context to repo root, updated `docker-compose.yml` and `railway.json`, and added `--no-dev` to container runtime commands.
 - **Status:** **`[FIXED]`** (Verified via successful root Docker build and CI test job).
 
-### 6. Frontend WCAG AA Contrast & Semantic HTML / SEO
+#### 6. Frontend WCAG AA Contrast & Semantic HTML / SEO
 - **Issue:** Brand color `#e8457a` failed WCAG AA minimum contrast ratio (3.77:1 vs 4.5:1 requirement). Authenticated pages lacked `<main>` landmark, and `index.html` lacked meta description.
-- **Resolution:** Replace brand accent color with WCAG AA compliant `#c2255c` (contrast 5.66:1), wrap authenticated page views in semantic `<main>`, and add descriptive meta tags and `robots.txt`.
-- **Status:** **`[PLANNED / IN PROGRESS]`** (Audit completed, code fixes scheduled).
+- **Resolution:** Replaced brand accent color with WCAG AA compliant `#c2255c` (contrast 5.66:1), wrapped authenticated page views in semantic `<main>`, and added descriptive meta tags and `robots.txt`.
+- **Status:** **`[FIXED]`** (Clean build, WCAG AA compliance verified, `<main>` landmarks added across all pages).

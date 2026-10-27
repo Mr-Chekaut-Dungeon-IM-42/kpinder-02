@@ -69,7 +69,7 @@ function FeedView({ token }: { token: string }) {
   const current = candidates[index];
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <NavBar />
       {banner && <p className={styles.banner}>{banner}</p>}
       {error && <p className={styles.error}>{error}</p>}
@@ -118,6 +118,6 @@ function FeedView({ token }: { token: string }) {
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }
