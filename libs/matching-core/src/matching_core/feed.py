@@ -5,7 +5,7 @@ from matching_core.models import CandidateProfile, FeedCandidate
 from matching_core.ports import CandidateRepository, PhotoUrlResolver
 from matching_core.scoring import jaccard
 
-DEFAULT_CANDIDATE_FETCH_LIMIT = 500
+DEFAULT_CANDIDATE_FETCH_LIMIT = 50
 
 
 class FeedService:

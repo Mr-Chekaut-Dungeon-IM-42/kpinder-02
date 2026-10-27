@@ -24,10 +24,6 @@ async def user_exists(db: AsyncSession, user_id: uuid.UUID) -> bool:
 async def get_candidates(
     db: AsyncSession, caller: User, radius_km: float, limit: int
 ) -> list[User]:
-    caller_location = (
-        select(User.location).where(User.id == caller.id).scalar_subquery()
-    )
-
     already_swiped = exists(
         select(Swipe.id).where(Swipe.swiper_id == caller.id, Swipe.swiped_id == User.id)
     )
@@ -35,7 +31,7 @@ async def get_candidates(
     conditions = [
         User.id != caller.id,
         User.location.isnot(None),
-        func.ST_DWithin(User.location, caller_location, radius_km * 1000),
+        func.ST_DWithin(User.location, caller.location, radius_km * 1000),
         ~already_swiped,
     ]
 
