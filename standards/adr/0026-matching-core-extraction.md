@@ -1,7 +1,9 @@
 # Extracting matching-core as a ports-based library
 
-- Status: accepted
+- Status: accepted (partially amended by [ADR-0027](0027-candidate-pool-reduction-and-feed-optimization.md))
 - Date: 2026-10-26
+
+> **Notice (2026-10-27)**: The 500-candidate fetch pool limit and scalar location subquery deferred under "Known gaps" and "Alternatives considered" have been resolved by [ADR-0027](0027-candidate-pool-reduction-and-feed-optimization.md). The candidate fetch pool was reduced to 50, reducing feed latency 25x (p50 19ms) under 150 concurrent users without needing full SQL pushdown.
 
 ## Context
 
