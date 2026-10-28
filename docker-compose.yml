@@ -32,7 +32,13 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    # Context is the repo root (not ./backend) since Lab 5 — matching-core
+    # (ADR-0026) is a local uv path dependency the Dockerfile needs inside
+    # its build context. See backend/Dockerfile and the repo-root
+    # railway.json.
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - path: .env
         required: false

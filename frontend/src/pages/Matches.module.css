@@ -53,7 +53,7 @@
 .chatCta {
   margin-left: auto;
   font-size: 0.8rem;
-  color: #e8457a;
+  color: #c2255c;
   font-weight: 500;
 }
 
@@ -75,9 +75,9 @@
   width: 100%;
   padding: 0.6rem;
   border-radius: 8px;
-  border: 1px solid #e8457a;
+  border: 1px solid #c2255c;
   background: white;
-  color: #e8457a;
+  color: #c2255c;
   cursor: pointer;
 }
 

@@ -32,6 +32,21 @@ jobs:
       - run: uv run ruff format --check .
         working-directory: backend
 
+  matching-core-test:
+    name: matching-core lint + tests (libs/, ADR-0026)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --all-extras
+        working-directory: libs/matching-core
+      - run: uv run ruff check .
+        working-directory: libs/matching-core
+      - run: uv run ruff format --check .
+        working-directory: libs/matching-core
+      - run: uv run pytest -q
+        working-directory: libs/matching-core
+
   backend-build:
     name: Backend build (uv build)
     runs-on: ubuntu-latest
@@ -133,7 +148,7 @@ jobs:
         # `/health` doesn't touch the DB, so the container reports healthy
         # on an empty schema — the e2e journey (signup, etc.) needs the
         # tables to actually exist first.
-        run: docker compose exec -T backend uv run alembic upgrade head
+        run: docker compose exec -T backend uv run --no-dev alembic upgrade head
       - run: uv sync --all-extras
         working-directory: backend
       - run: uv run pytest -q -m e2e

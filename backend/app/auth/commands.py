@@ -24,7 +24,7 @@ class SignupCommand:
         self.db = db
 
     async def execute(self, data: SignupRequest) -> User:
-        password_hash = hash_password(data.password)
+        password_hash = await hash_password(data.password)
         try:
             user = await repository.create_user(
                 self.db, email=data.email, password_hash=password_hash, name=data.name
@@ -45,7 +45,7 @@ class LoginCommand:
 
     async def execute(self, data: LoginRequest) -> TokenResponse:
         user = await repository.get_user_by_email(self.db, data.email)
-        if user is None or not verify_password(data.password, user.password_hash):
+        if user is None or not await verify_password(data.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",

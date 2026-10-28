@@ -49,7 +49,7 @@
 }
 
 .backLink {
-  color: #e8457a;
+  color: #c2255c;
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;
@@ -99,7 +99,7 @@
 }
 
 .searchInput:focus {
-  border-color: #e8457a;
+  border-color: #c2255c;
 }
 
 .clearSearchBtn {
@@ -160,7 +160,7 @@
 }
 
 .mine .bubble {
-  background: #e8457a;
+  background: #c2255c;
   color: white;
   border-bottom-right-radius: 3px;
 }
@@ -191,7 +191,7 @@
 }
 
 .actionBtn:hover {
-  color: #e8457a;
+  color: #c2255c;
 }
 
 .deleteBtn:hover {
@@ -217,7 +217,7 @@
   padding: 0.35rem 0.7rem;
   border-radius: 6px;
   border: none;
-  background: #e8457a;
+  background: #c2255c;
   color: white;
   font-size: 0.8rem;
   cursor: pointer;
@@ -251,14 +251,14 @@
 }
 
 .messageInput:focus {
-  border-color: #e8457a;
+  border-color: #c2255c;
 }
 
 .sendBtn {
   padding: 0.6rem 1.2rem;
   border-radius: 20px;
   border: none;
-  background: #e8457a;
+  background: #c2255c;
   color: white;
   font-weight: 600;
   font-size: 0.92rem;

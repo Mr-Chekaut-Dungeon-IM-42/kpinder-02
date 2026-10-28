@@ -1,10 +1,12 @@
 import uuid
 
 from fastapi import Depends, HTTPException, status
+from matching_core import CallerNotFoundError, FeedService, LocationRequiredError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.matching import repository
-from app.matching.common import decode_cursor, encode_cursor, jaccard, to_candidate
+from app.matching.adapters import SqlAlchemyCandidateRepository, StoragePhotoUrlResolver
+from app.matching.common import decode_cursor, encode_cursor
 from app.matching.schemas import (
     CandidateResponse,
     MatchesPage,
@@ -13,40 +15,50 @@ from app.matching.schemas import (
 )
 from app.shared.config import settings
 from app.shared.db import get_db
-from app.shared.models import User
 from app.shared.storage import PhotoStorage, get_photo_storage, resolve_photo_url
 
 
 class GetFeedQuery:
+    """Thin adapter: wires matching_core's FeedService to this app's DB/
+    storage and translates its typed errors to HTTP ones. The candidate-
+    selection/ranking logic lives in matching_core now (standards/adr/0026)
+    — this class owns none of it."""
+
     def __init__(self, db: AsyncSession, storage: PhotoStorage | None = None) -> None:
         self.db = db
         self.storage = storage
 
     async def execute(self, caller_id: uuid.UUID) -> list[CandidateResponse]:
-        caller = await repository.get_user_with_interests(self.db, caller_id)
-        if caller is None:
+        service = FeedService(
+            repository=SqlAlchemyCandidateRepository(self.db),
+            photo_resolver=StoragePhotoUrlResolver(self.storage),
+        )
+        try:
+            candidates = await service.get_feed(
+                str(caller_id),
+                radius_km=settings.matching_radius_km,
+                feed_size=settings.matching_feed_size,
+            )
+        except CallerNotFoundError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Not found"
-            )
-        if caller.location is None:
+            ) from exc
+        except LocationRequiredError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Set your location before viewing the feed",
-            )
+            ) from exc
 
-        caller_interests = {ui.interest.name for ui in caller.interests}
-        candidates = await repository.get_candidates(
-            self.db, caller, settings.matching_radius_km, limit=500
-        )
-
-        def score(candidate: User) -> float:
-            candidate_interests = {ui.interest.name for ui in candidate.interests}
-            return jaccard(caller_interests, candidate_interests)
-
-        scored = sorted(candidates, key=score, reverse=True)
         return [
-            await to_candidate(c, storage=self.storage)
-            for c in scored[: settings.matching_feed_size]
+            CandidateResponse(
+                id=uuid.UUID(c.id),
+                name=c.name,
+                age=c.age,
+                bio=c.bio,
+                photo_url=c.photo_url,
+                interests=c.interests,
+            )
+            for c in candidates
         ]
 
 

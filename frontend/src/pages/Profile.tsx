@@ -195,15 +195,15 @@ function ProfileForm({ token }: { token: string }) {
 
   if (loading) {
     return (
-      <div className={styles.page}>
+      <main className={styles.page}>
         <NavBar />
         <div className={styles.card}>Loading profile…</div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <NavBar />
       <div className={styles.card}>
         <div className={styles.header}>
@@ -348,6 +348,6 @@ function ProfileForm({ token }: { token: string }) {
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }

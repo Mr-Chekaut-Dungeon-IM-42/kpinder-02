@@ -281,7 +281,7 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
   const displayedMessages = searchResults ?? messages;
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <NavBar />
       <div className={styles.chatContainer}>
         <div className={styles.header}>
@@ -437,6 +437,6 @@ function ChatView({ token, matchId, initialOtherUser }: ChatViewProps) {
           </button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
